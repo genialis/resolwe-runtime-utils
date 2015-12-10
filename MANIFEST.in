@@ -1,0 +1,7 @@
+# Include extra Python files
+include __about__.py test_resolwe_runtime_utils.py
+# Include docs
+recursive-include docs *.rst
+include docs/conf.py
+# Include licensing and copyright files
+include AUTHORS LICENSE
