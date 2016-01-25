@@ -20,7 +20,7 @@ __url__ = 'https://github.com/genialis/resolwe-runtime-utils'
 
 # Semantic versioning is used. For more information see:
 # https://packaging.python.org/en/latest/distributing/#semantic-versioning-preferred
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 __author__ = 'The resolwe-runtime-utils authors'
 __email__ = 'dev-team@genialis.com'
