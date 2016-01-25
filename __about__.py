@@ -26,4 +26,4 @@ __author__ = 'The resolwe-runtime-utils authors'
 __email__ = 'dev-team@genialis.com'
 
 __license__ = 'Apache License (2.0)'
-__copyright__ = '2015, ' + __author__
+__copyright__ = '2015-2016, ' + __author__
