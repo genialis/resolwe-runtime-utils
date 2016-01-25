@@ -73,6 +73,7 @@ setup(
 
     extras_require={
         'docs': ['Sphinx'],
+        'package': ['twine', 'wheel'],
         'test': ['check-manifest', 'readme'],
     },
 

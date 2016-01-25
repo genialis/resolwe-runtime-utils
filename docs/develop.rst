@@ -20,7 +20,7 @@ change directory::
 
 Prepare Resolwe for development::
 
-    pip install -e .[docs,test]
+    pip install -e .[docs,package,test]
 
 .. note::
 
