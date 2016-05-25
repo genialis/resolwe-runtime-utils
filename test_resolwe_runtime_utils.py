@@ -15,6 +15,7 @@
 # pylint: disable=missing-docstring
 import json
 from unittest import TestCase
+from unittest.mock import patch
 
 from resolwe_runtime_utils import (
         save, save_list, save_file, save_file_list, error, warning, info, progress, checkrc
@@ -67,13 +68,23 @@ class TestGenSaveList(ResolweRuntimeUtilsTestCase):
 
 class TestGenSaveFile(ResolweRuntimeUtilsTestCase):
 
-    def test_file(self):
+    @patch('os.path.isdir', return_value=True)
+    @patch('os.path.isfile', return_value=True)
+    def test_file(self, isfile_mock, isdir_mock):
         self.assertEqual(save_file('etc', 'foo.py'),
                          '{"etc": {"file": "foo.py"}}')
         self.assertEqual(save_file('etc', 'foo bar.py'),
                          '{"etc": {"file": "foo bar.py"}}')
 
-    def test_file_with_refs(self):
+    def test_file_missing(self):
+        self.assertEqual(save_file('etc', 'foo.py'),
+                         '{"proc.error": "Output \'etc\' set to a missing file: \'foo.py\'."}')
+        self.assertEqual(save_file('etc', 'foo bar.py'),
+                         '{"proc.error": "Output \'etc\' set to a missing file: \'foo bar.py\'."}')
+
+    @patch('os.path.isdir', return_value=True)
+    @patch('os.path.isfile', return_value=True)
+    def test_file_with_refs(self, isfile_mock, isdir_mock):
         self.assertJSONEqual(
             save_file('etc', 'foo.py', 'ref1.txt', 'ref2.txt'),
             '{"etc": {"file": "foo.py", "refs": ["ref1.txt", "ref2.txt"]}}'
@@ -85,15 +96,29 @@ class TestGenSaveFile(ResolweRuntimeUtilsTestCase):
 
 class TestGenSaveFileList(ResolweRuntimeUtilsTestCase):
 
-    def test_files(self):
+    @patch('os.path.isdir', return_value=True)
+    @patch('os.path.isfile', return_value=True)
+    def test_files(self, isfile_mock, isdir_mock):
         self.assertEqual(
             save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'),
             '{"src": [{"file": "foo.py"}, {"file": "bar 2.py"}, {"file": "baz/3.py"}]}')
 
-    def test_files_with_refs(self):
+    def test_missing_file(self):
+        self.assertEqual(save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'),
+            '{"proc.error": "Output \'src\' set to a missing file: \'foo.py\'."}')
+
+    @patch('os.path.isdir', return_value=True)
+    @patch('os.path.isfile', return_value=True)
+    def test_file_with_refs(self, isfile_mock, isdir_mock):
         self.assertJSONEqual(
             save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'),
             '{"src": [{"file": "foo.py", "refs": ["ref1.gz", "ref2.gz"]}, {"file": "bar.py"}]}')
+
+    @patch('os.path.isdir', return_value=True)
+    @patch('os.path.isfile', return_value=True)
+    def test_files_invalid_format(self, isfile_mock, isdir_mock):
+        self.assertEqual(save_file_list('src', 'foo.py:ref1.gz:ref2.gz', 'bar.py'),
+            '{"proc.error": "Only one colon \':\' allowed in file."}')
 
 
 class TestGenInfo(ResolweRuntimeUtilsTestCase):
@@ -127,16 +152,22 @@ class TestGenProgress(ResolweRuntimeUtilsTestCase):
 
     def test_number(self):
         self.assertEqual(progress(0.1), '{"proc.progress": 0.1}')
-        self.assertEqual(progress(0), '{"proc.progress": 0}')
-        self.assertEqual(progress(1), '{"proc.progress": 1}')
+        self.assertEqual(progress(0), '{"proc.progress": 0.0}')
+        self.assertEqual(progress(1), '{"proc.progress": 1.0}')
 
     def test_string(self):
         self.assertEqual(progress('0.1'), '{"proc.progress": 0.1}')
 
+    def test_bool(self):
+        self.assertEqual(progress(True), '{"proc.progress": 1.0}')
+
     def test_improper_input(self):
-        self.assertRaises(ValueError, progress, 'one')
-        self.assertRaises(ValueError, progress, -1)
-        self.assertRaises(ValueError, progress, 1.1)
+        self.assertEqual(progress(None), '{"proc.warning": "Progress must be float."}')
+        self.assertEqual(progress('one'), '{"proc.warning": "Progress must be float."}')
+        self.assertEqual(progress(-1),
+                         '{"proc.warning": "Progress must be float between 0 and 1."}')
+        self.assertEqual(progress(1.1),
+                         '{"proc.warning": "Progress must be float between 0 and 1."}')
 
 
 class TestGenCheckRC(ResolweRuntimeUtilsTestCase):
@@ -152,3 +183,7 @@ class TestGenCheckRC(ResolweRuntimeUtilsTestCase):
         self.assertEqual(checkrc('0'), '{"proc.rc": 0}')
         self.assertEqual(checkrc('2', '2', "Error"), '{"proc.rc": 0}')
         self.assertJSONEqual(checkrc('1', '2', "Error"), '{"proc.rc": 1, "proc.error": "Error"}')
+
+    def test_improper_input(self):
+        self.assertEqual(checkrc(None), '{"proc.error": "Return code must be integer."}')
+        self.assertEqual(checkrc(1, 'Foo', 'Bar'), '{"proc.error": "Return codes must be integers."}')

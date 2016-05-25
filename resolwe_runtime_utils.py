@@ -17,6 +17,7 @@ Utility functions that make it easier to write a Resolwe process.
 """
 
 import json
+import os
 
 
 def _get_json(value):
@@ -61,9 +62,17 @@ def save_file(key, file_name, *refs):
     given.
 
     """
+    if not os.path.isfile(file_name):
+        return error("Output '{}' set to a missing file: '{}'.".format(key, file_name))
     result = {key: {'file': file_name}}
+
     if refs:
+        missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
+        if len(missing_refs) > 0:
+            return error("Output '{}' set to missing references: '{}'.".format(
+                key, ', '.join(missing_refs)))
         result[key]['refs'] = refs
+
     return json.dumps(result)
 
 
@@ -81,11 +90,17 @@ def save_file_list(key, *files):
     """
     file_list = []
     for file_name in files:
+        if not os.path.isfile(file_name):
+            return error("Output '{}' set to a missing file: '{}'.".format(key, file_name))
         vals = file_name.split(':')
         file_obj = {'file': vals[0]}
 
         if len(vals) == 2:
             refs = [ref_path.strip() for ref_path in vals[1].split(',')]
+            missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
+            if len(missing_refs) > 0:
+                return error("Output '{}' set to missing references: '{}'.".format(
+                    key, ', '.join(missing_refs)))
             file_obj['refs'] = refs
         elif len(vals) >= 2:
             return error("Only one colon ':' allowed in file.")
@@ -120,11 +135,20 @@ def progress(progress):
 
     """
     if isinstance(progress, str):
-        progress = json.loads(progress)
-    if not isinstance(progress, float) and not isinstance(progress, int):
-        raise ValueError("Progress must be float.")
+        try:
+            progress = json.loads(progress)
+        except ValueError:
+            return warning("Progress must be float.")
+
+    if isinstance(progress, int):
+        # cast to int first because bool isinstance int
+        progress = float(int(progress))
+    elif not isinstance(progress, float):
+        return warning("Progress must be float.")
+
     if not 0 <= float(progress) <= 1:
-        raise ValueError("Progress must be float between 0 and 1.")
+        return warning("Progress must be float between 0 and 1.")
+
     return json.dumps({'proc.progress': progress})
 
 
@@ -144,7 +168,11 @@ def checkrc(rc, *args):
     where "proc.error" entry is omitted if empty.
 
     """
-    rc = int(rc)
+    try:
+        rc = int(rc)
+    except TypeError:
+        return error("Return code must be integer.")
+
     acceptable_rcs = []
     error_msg = ""
 
@@ -153,7 +181,7 @@ def checkrc(rc, *args):
             try:
                 acceptable_rcs.append(int(code))
             except ValueError:
-                ValueError("Return codes must be integers.")
+                return error("Return codes must be integers.")
 
         try:
             acceptable_rcs.append(int(args[-1]))

@@ -28,3 +28,5 @@ Changed
   compute the test coverage while running the tests
 - Create ``_get_json`` auxiliary function use it in ``save`` and ``save_list``
   functions
+- Check if files exist before saving them
+- Save Resolwe errors instead of raising Python exceptions
