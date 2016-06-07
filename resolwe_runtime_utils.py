@@ -36,6 +36,17 @@ def save(key, value):
     return json.dumps({key: value_json})
 
 
+def save_list(key, *values):
+    """Convert the given list of parameters to a JSON object.
+
+    JSON object is of the form:
+    { key: [values[0], values[1], ... ] },
+    where values represent the given list of parameters.
+
+    """
+    return json.dumps({key: values})
+
+
 def save_file(key, file_name, *refs):
     """Convert the given parameters to a special JSON object.
 
@@ -49,6 +60,34 @@ def save_file(key, file_name, *refs):
     if refs:
         result[key]['refs'] = refs
     return json.dumps(result)
+
+
+def save_file_list(key, *files):
+    """Convert the given parameters to a special JSON object.
+
+    Comma-separated Refs are assigned to files using colon:
+    e.g. file_name:refs1,refs2
+
+    JSON object is of the form:
+    { key: {"file": file_name}}, or
+    { key: {"file": file_name, "refs": [refs[0], refs[1], ... ]}} if refs are
+    given.
+
+    """
+    file_list = []
+    for file_name in files:
+        vals = file_name.split(':')
+        file_obj = {'file': vals[0]}
+
+        if len(vals) == 2:
+            refs = [ref_path.strip() for ref_path in vals[1].split(',')]
+            file_obj['refs'] = refs
+        elif len(vals) >= 2:
+            return error("Only one colon ':' allowed in file.")
+
+        file_list.append(file_obj)
+
+    return json.dumps({key: file_list})
 
 
 def info(value):
@@ -141,8 +180,16 @@ def _re_save_main():
     _re_generic_main(save)
 
 
+def _re_save_list_main():
+    _re_generic_main(save_list)
+
+
 def _re_save_file_main():
     _re_generic_main(save_file)
+
+
+def _re_save_file_list_main():
+    _re_generic_main(save_file_list)
 
 
 def _re_warning_main():

@@ -17,7 +17,7 @@ import json
 from unittest import TestCase
 
 from resolwe_runtime_utils import (
-        save, save_file, error, warning, info, progress, checkrc
+        save, save_list, save_file, save_file_list, error, warning, info, progress, checkrc
     )
 
 
@@ -50,6 +50,19 @@ class TestGenSave(ResolweRuntimeUtilsTestCase):
         self.assertRaises(TypeError, save, 'etc', '{file:', 'foo.py}')
 
 
+class TestGenSaveList(ResolweRuntimeUtilsTestCase):
+
+    def test_paths(self):
+        self.assertEqual(save_list('src', 'file1.txt', 'file 2.txt'),
+                         '{"src": ["file1.txt", "file 2.txt"]}')
+
+    def test_urls(self):
+        self.assertEqual(
+            save_list('urls', 'https://www.google.com', 'https://www.genialis.com'),
+            '{"urls": ["https://www.google.com", "https://www.genialis.com"]}'
+        )
+
+
 class TestGenSaveFile(ResolweRuntimeUtilsTestCase):
 
     def test_file(self):
@@ -66,6 +79,19 @@ class TestGenSaveFile(ResolweRuntimeUtilsTestCase):
 
     def test_improper_input(self):
         self.assertRaises(TypeError, save_file, 'etc')
+
+
+class TestGenSaveFileList(ResolweRuntimeUtilsTestCase):
+
+    def test_files(self):
+        self.assertEqual(
+            save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'),
+            '{"src": [{"file": "foo.py"}, {"file": "bar 2.py"}, {"file": "baz/3.py"}]}')
+
+    def test_files_with_refs(self):
+        self.assertJSONEqual(
+            save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'),
+            '{"src": [{"file": "foo.py", "refs": ["ref1.gz", "ref2.gz"]}, {"file": "bar.py"}]}')
 
 
 class TestGenInfo(ResolweRuntimeUtilsTestCase):
