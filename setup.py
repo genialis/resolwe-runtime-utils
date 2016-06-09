@@ -73,7 +73,7 @@ setup(
 
     extras_require={
         'dev': ['tox'],
-        'docs': ['Sphinx'],
+        'docs': ['Sphinx', 'sphinx_rtd_theme'],
         'package': ['twine', 'wheel'],
         'test': ['check-manifest', 'readme'],
     },

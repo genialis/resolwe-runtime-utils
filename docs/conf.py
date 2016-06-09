@@ -59,6 +59,9 @@ todo_include_todos = False
 # Sort members as they appear in the source code
 autodoc_member_order = 'bysource'
 
+# Warn about all references where the target cannot be found
+nitpicky = True
+
 # -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.
