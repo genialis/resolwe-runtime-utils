@@ -72,6 +72,7 @@ setup(
     py_modules=['resolwe_runtime_utils'],
 
     extras_require={
+        'dev': ['tox'],
         'docs': ['Sphinx'],
         'package': ['twine', 'wheel'],
         'test': ['check-manifest', 'readme'],
