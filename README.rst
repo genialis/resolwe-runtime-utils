@@ -2,11 +2,19 @@
 Resolwe Runtime Utilities
 =========================
 
-|docs|
+|docs| |pypi_version| |pypi_pyversions|
 
 .. |docs| image:: https://readthedocs.org/projects/resolwe-runtime-utils/badge/?version=latest
     :target: http://resolwe-runtime-utils.readthedocs.io/
     :alt: Documentation Status
+
+.. |pypi_version| image:: https://img.shields.io/pypi/v/resolwe-runtime-utils.svg
+    :target: https://pypi.python.org/pypi/resolwe-runtime-utils
+    :alt: Version on PyPI
+
+.. |pypi_pyversions| image:: https://img.shields.io/pypi/pyversions/resolwe-runtime-utils.svg
+    :target: https://pypi.python.org/pypi/resolwe-runtime-utils
+    :alt: Supported Python versions
 
 A project that provides convenience utilities for writing processes for the
 Resolwe_ dataflow engine.
