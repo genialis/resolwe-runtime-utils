@@ -1,5 +1,5 @@
-Resolwe runtime utilities
-=========================
+|project_name|
+==============
 
 A project that provides convenience utilities for writing processes for the
 `Resolwe <https://github.com/genialis/resolwe>`_ dataflow engine.
@@ -12,4 +12,5 @@ Contents:
    install
    api_reference
    console_reference
-   develop
+   CHANGELOG
+   contributing

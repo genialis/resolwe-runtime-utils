@@ -1,10 +1,12 @@
 =========================
-Resolwe runtime utilities
+Resolwe Runtime Utilities
 =========================
 
-.. image:: https://readthedocs.org/projects/resolwe-runtime-utils/badge/?version=latest
-    :target: http://resolwe-runtime-utils.readthedocs.org/
-    :alt: Latest Docs
+|docs|
+
+.. |docs| image:: https://readthedocs.org/projects/resolwe-runtime-utils/badge/?version=latest
+    :target: http://resolwe-runtime-utils.readthedocs.io/
+    :alt: Documentation Status
 
 A project that provides convenience utilities for writing processes for the
 Resolwe_ dataflow engine.
@@ -12,12 +14,12 @@ Resolwe_ dataflow engine.
 You can find more information in the documentation_.
 
 .. _Resolwe: https://github.com/genialis/resolwe
-.. _documentation: http://resolwe-runtime-utils.readthedocs.org/
+.. _documentation: http://resolwe-runtime-utils.readthedocs.io/
 
 Getting started
 ---------------
 
-Install resolwe-runtime-utils from PyPI_::
+Install Resolwe Runtime Utilities from PyPI_::
 
     pip install resolwe-runtime-utils
 
@@ -36,3 +38,11 @@ Or use them in your Bash Resolwe process::
     re-save-file "etc" "foo.py"
 
 .. _PyPI: https://pypi.python.org/pypi/resolwe-runtime-utils
+
+Contribute
+----------
+
+We welcome new contributors. To learn more, read Contributing_ section of our
+documentation.
+
+.. _Contributing: http://resolwe-runtime-utils.readthedocs.io/en/latest/contributing.html

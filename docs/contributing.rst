@@ -1,13 +1,12 @@
--------
-Develop
--------
+============
+Contributing
+============
 
-Preparing environement
-----------------------
+Preparing environment
+=====================
 
 `Fork <https://help.github.com/articles/fork-a-repo>`__ the main
-`resolwe-runtime-utils's git repository
-<https://github.com/genialis/resolwe>`_.
+|project_git_repo_link|.
 
 If you don't have Git installed on your system, follow `these
 instructions <http://git-scm.com/book/en/v2/Getting-Started-Installing-Git>`__.
@@ -18,7 +17,7 @@ change directory::
     git clone https://github.com/<username>/resolwe-runtime-utils.git
     cd resolwe-runtime-utils
 
-Prepare Resolwe for development::
+Prepare |project_name| for development::
 
     pip install -e .[dev,docs,package,test]
 
@@ -28,27 +27,47 @@ Prepare Resolwe for development::
     to create an isolated Python environement for resolwe-runtime-utils.
 
 Running tests
--------------
+=============
+
+Using Tox
+---------
+
+To run the tests, use::
+
+    tox
+
+To re-create the virtual environment before running the tests, use::
+
+    tox -r
+
+To only run the tests of a given Tox environment, use::
+
+    tox -e <tox-environment>
+
+For example, to only run the packaging tests, use ::
+
+    tox -e packaging
+
+.. note::
+
+    To see the list of available Tox environments, see ``tox.ini``.
+
+Manually
+--------
 
 To run the tests, use::
 
     python setup.py test
 
-To run the tests with Tox_, use::
-
-    tox -r
-
-.. _Tox: http://tox.testrun.org/
-
-Buildling documentation
------------------------
+Building documentation
+======================
 
 .. code-block:: none
 
     python setup.py build_sphinx
 
 Preparing release
------------------
+=================
 
 Clean ``build`` directory::
 
