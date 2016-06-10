@@ -2,7 +2,11 @@
 Resolwe Runtime Utilities
 =========================
 
-|docs| |pypi_version| |pypi_pyversions|
+|build| |docs| |pypi_version| |pypi_pyversions|
+
+.. |build| image:: https://travis-ci.org/genialis/resolwe-runtime-utils.svg?branch=master
+    :target: https://travis-ci.org/genialis/resolwe-runtime-utils
+    :alt: Build Status
 
 .. |docs| image:: https://readthedocs.org/projects/resolwe-runtime-utils/badge/?version=latest
     :target: http://resolwe-runtime-utils.readthedocs.io/

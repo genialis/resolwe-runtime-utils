@@ -13,6 +13,7 @@ Unreleased
 
 Added
 -----
+- Use Travis CI to run the tests
 - Start writing the Change Log and include it in the Documentation
 - Add ``docs`` and ``packaging`` Tox testing environments
 - Add ``dev``, a list of extra requirements for development
