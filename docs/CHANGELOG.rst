@@ -14,6 +14,7 @@ Unreleased
 Added
 -----
 - Use Travis CI to run the tests
+- Add test coverage and track it with Codecov
 - Start writing the Change Log and include it in the Documentation
 - Add ``docs`` and ``packaging`` Tox testing environments
 - Add ``dev``, a list of extra requirements for development
@@ -22,3 +23,5 @@ Changed
 -------
 - Consistently use *Resolwe Runtime Utilities* as the project name/title
 - Improve documentation
+- Use py.test as the test runner since its pytest-cov plugin enables to easily
+  compute the test coverage while running the tests

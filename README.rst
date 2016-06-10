@@ -2,11 +2,15 @@
 Resolwe Runtime Utilities
 =========================
 
-|build| |docs| |pypi_version| |pypi_pyversions|
+|build| |coverage| |docs| |pypi_version| |pypi_pyversions|
 
 .. |build| image:: https://travis-ci.org/genialis/resolwe-runtime-utils.svg?branch=master
     :target: https://travis-ci.org/genialis/resolwe-runtime-utils
     :alt: Build Status
+
+.. |coverage| image:: https://img.shields.io/codecov/c/github/genialis/resolwe-runtime-utils/master.svg
+    :target: http://codecov.io/github/genialis/resolwe-runtime-utils?branch=master
+    :alt: Coverage Status
 
 .. |docs| image:: https://readthedocs.org/projects/resolwe-runtime-utils/badge/?version=latest
     :target: http://resolwe-runtime-utils.readthedocs.io/

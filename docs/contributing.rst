@@ -57,7 +57,18 @@ Manually
 
 To run the tests, use::
 
-    python setup.py test
+    py.test
+
+Coverage report
+---------------
+
+To see the tests' code coverage, use::
+
+    py.test --cov=resolwe_runtime_utils
+
+To generate a HTML with tests' code coverage, use::
+
+    py.test --cov=resolwe_runtime_utils --cov-report=html
 
 Building documentation
 ======================

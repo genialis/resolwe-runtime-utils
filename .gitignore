@@ -11,3 +11,7 @@ __pycache__/
 
 # ignore Tox files
 .tox
+
+# ignore Coverage.py files
+.coverage
+htmlcov/
