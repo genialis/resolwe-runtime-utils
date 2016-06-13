@@ -53,18 +53,18 @@ def save_list(key, *values):
     return json.dumps({key: [_get_json(value) for value in values]})
 
 
-def save_file(key, file_name, *refs):
+def save_file(key, file_path, *refs):
     """Convert the given parameters to a special JSON object.
 
     JSON object is of the form:
-    { key: {"file": file_name}}, or
-    { key: {"file": file_name, "refs": [refs[0], refs[1], ... ]}} if refs are
-    given.
+    { key: {"file": file_path}}, or
+    { key: {"file": file_path, "refs": [refs[0], refs[1], ... ]}}
 
     """
-    if not os.path.isfile(file_name):
-        return error("Output '{}' set to a missing file: '{}'.".format(key, file_name))
-    result = {key: {'file': file_name}}
+    if not os.path.isfile(file_path):
+        return error("Output '{}' set to a missing file: '{}'.".format(key, file_path))
+
+    result = {key: {"file": file_path}}
 
     if refs:
         missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
@@ -80,13 +80,12 @@ def save_file_list(key, *files_refs):
     """Convert the given parameters to a special JSON object.
 
     Each parameter is a file-refs specification of the form:
-    <file-name>:<reference1>,<reference2>, ...,
+    <file-path>:<reference1>,<reference2>, ...,
     where the colon ':' and the list of references are optional.
 
     JSON object is of the form:
-    { key: {"file": file_name}}, or
-    { key: {"file": file_name, "refs": [refs[0], refs[1], ... ]}} if references
-    are given.
+    { key: {"file": file_path}}, or
+    { key: {"file": file_path, "refs": [refs[0], refs[1], ... ]}}
 
     """
     file_list = []
@@ -113,6 +112,67 @@ def save_file_list(key, *files_refs):
         file_list.append(file_obj)
 
     return json.dumps({key: file_list})
+
+
+def save_dir(key, dir_path, *refs):
+    """Convert the given parameters to a special JSON object.
+
+    JSON object is of the form:
+    { key: {"dir": dir_path}}, or
+    { key: {"dir": dir_path, "refs": [refs[0], refs[1], ... ]}}
+
+    """
+    if not os.path.isdir(dir_path):
+        return error("Output '{}' set to a missing directory: '{}'.".format(key, dir_path))
+
+    result = {key: {"dir": dir_path}}
+
+    if refs:
+        missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
+        if len(missing_refs) > 0:
+            return error("Output '{}' set to missing references: '{}'.".format(
+                key, ', '.join(missing_refs)))
+        result[key]["refs"] = refs
+
+    return json.dumps(result)
+
+
+def save_dir_list(key, *dirs):
+    """Convert the given parameters to a special JSON object.
+
+    Each parameter is a dir-refs specification of the form:
+    <dir-path>:<reference1>,<reference2>, ...,
+    where the colon ':' and the list of references are optional.
+
+    JSON object is of the form:
+    { key: {"dir": dir_path}}, or
+    { key: {"dir": dir_path, "refs": [refs[0], refs[1], ... ]}}
+
+    """
+    dir_list = []
+    for dir_path in dirs:
+        if not os.path.isdir(dir_path):
+            return error("Output '{}' set to a missing directory: '{}'.".format(key, dir_path))
+
+        vals = dir_path.split(':')
+        dir_obj = {'dir': vals[0]}
+
+        if len(vals) == 2:
+            refs = [ref_path.strip() for ref_path in vals[1].split(',')]
+
+            missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
+            if len(missing_refs) > 0:
+                return error("Output '{}' set to missing references: '{}'.".format(
+                    key, ', '.join(missing_refs)))
+
+            dir_obj['refs'] = refs
+
+        elif len(vals) >= 2:
+            return error("Only one colon ':' allowed in directory.")
+
+        dir_list.append(dir_obj)
+
+    return json.dumps({key: dir_list})
 
 
 def info(value):
@@ -224,6 +284,14 @@ def _re_save_file_main():
 
 def _re_save_file_list_main():
     _re_generic_main(save_file_list)
+
+
+def _re_save_dir_main():
+    _re_generic_main(save_dir)
+
+
+def _re_save_dir_list_main():
+    _re_generic_main(save_dir_list)
 
 
 def _re_warning_main():

@@ -84,6 +84,8 @@ setup(
             're-save-list = resolwe_runtime_utils:_re_save_list_main',
             're-save-file = resolwe_runtime_utils:_re_save_file_main',
             're-save-file-list = resolwe_runtime_utils:_re_save_file_list_main',
+            're-save-dir = resolwe_runtime_utils:_re_save_dir_main',
+            're-save-dir-list = resolwe_runtime_utils:_re_save_dir_list_main',
             're-warning = resolwe_runtime_utils:_re_warning_main',
             're-error = resolwe_runtime_utils:_re_error_main',
             're-info = resolwe_runtime_utils:_re_info_main',

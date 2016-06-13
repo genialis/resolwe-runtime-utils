@@ -19,6 +19,7 @@ Added
 - Add ``docs`` and ``packaging`` Tox testing environments
 - Add ``dev``, a list of extra requirements for development
 - Add ``save_list`` and ``save_file_list`` functions and console commands
+- Add ``save_dir`` and ``save_dir_list`` functions and console commands
 
 Changed
 -------

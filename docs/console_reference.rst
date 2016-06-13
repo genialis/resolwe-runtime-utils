@@ -19,6 +19,14 @@ List of console commands that can be used inside a Bash Resolwe process.
 
     A console wrapper for :func:`resolwe_runtime_utils.save_file_list`.
 
+.. describe:: re-save-dir
+
+    A console wrapper for :func:`resolwe_runtime_utils.save_dir`.
+
+.. describe:: re-save-dir-list
+
+    A console wrapper for :func:`resolwe_runtime_utils.save_dir_list`.
+
 .. describe:: re-info
 
     A console wrapper for :func:`resolwe_runtime_utils.info`.
