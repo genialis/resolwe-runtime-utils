@@ -27,7 +27,7 @@ def save(key, value):
     where value can represent any JSON object.
 
     """
-    value = value.replace("\n", " ")
+    value = value.replace('\n', ' ')
     try:
         value_json = json.loads(value)
     except ValueError:
@@ -45,9 +45,9 @@ def save_file(key, file_name, *refs):
     given.
 
     """
-    result = {key: {"file": file_name}}
+    result = {key: {'file': file_name}}
     if refs:
-        result[key]["refs"] = refs
+        result[key]['refs'] = refs
     return json.dumps(result)
 
 
@@ -78,9 +78,9 @@ def progress(progress):
     if isinstance(progress, str):
         progress = json.loads(progress)
     if not isinstance(progress, float) and not isinstance(progress, int):
-        raise ValueError('Progress must be float.')
+        raise ValueError("Progress must be float.")
     if not 0 <= float(progress) <= 1:
-        raise ValueError('Progress must be float between 0 and 1.')
+        raise ValueError("Progress must be float between 0 and 1.")
     return json.dumps({'proc.progress': progress})
 
 
@@ -109,7 +109,7 @@ def checkrc(rc, *args):
             try:
                 acceptable_rcs.append(int(code))
             except ValueError:
-                ValueError('Return codes must be integers.')
+                ValueError("Return codes must be integers.")
 
         try:
             acceptable_rcs.append(int(args[-1]))

@@ -14,18 +14,18 @@
 
 """Central place for package metadata."""
 
-__name__ = 'resolwe-runtime-utils'
-__title__ = 'Resolwe Runtime Utilities'
-__summary__ = 'Runtime utilities for Resolwe dataflow engine'
-__url__ = 'https://github.com/genialis/resolwe-runtime-utils'
+__name__ = "resolwe-runtime-utils"
+__title__ = "Resolwe Runtime Utilities"
+__summary__ = "Runtime utilities for Resolwe dataflow engine"
+__url__ = "https://github.com/genialis/resolwe-runtime-utils"
 __git_repo_url__ = __url__
 
 # Semantic versioning is used. For more information see:
 # https://packaging.python.org/en/latest/distributing/#semantic-versioning-preferred
-__version__ = '0.2.0'
+__version__ = "0.2.0"
 
-__author__ = 'The resolwe-runtime-utils authors'
-__email__ = 'dev-team@genialis.com'
+__author__ = "The resolwe-runtime-utils authors"
+__email__ = "dev-team@genialis.com"
 
-__license__ = 'Apache License (2.0)'
-__copyright__ = '2015-2016, ' + __author__
+__license__ = "Apache License (2.0)"
+__copyright__ = "2015-2016, " + __author__
