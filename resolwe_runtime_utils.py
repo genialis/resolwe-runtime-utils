@@ -76,34 +76,39 @@ def save_file(key, file_name, *refs):
     return json.dumps(result)
 
 
-def save_file_list(key, *files):
+def save_file_list(key, *files_refs):
     """Convert the given parameters to a special JSON object.
 
-    Comma-separated Refs are assigned to files using colon:
-    e.g. file_name:refs1,refs2
+    Each parameter is a file-refs specification of the form:
+    <file-name>:<reference1>,<reference2>, ...,
+    where the colon ':' and the list of references are optional.
 
     JSON object is of the form:
     { key: {"file": file_name}}, or
-    { key: {"file": file_name, "refs": [refs[0], refs[1], ... ]}} if refs are
-    given.
+    { key: {"file": file_name, "refs": [refs[0], refs[1], ... ]}} if references
+    are given.
 
     """
     file_list = []
-    for file_name in files:
+    for file_refs in files_refs:
+        if ':' in file_refs:
+            try:
+                file_name, refs = file_refs.split(':')
+            except ValueError as e:
+                return error("Only one colon ':' allowed in file-refs specification.")
+        else:
+            file_name, refs = file_refs, None
         if not os.path.isfile(file_name):
             return error("Output '{}' set to a missing file: '{}'.".format(key, file_name))
-        vals = file_name.split(':')
-        file_obj = {'file': vals[0]}
+        file_obj = {'file': file_name}
 
-        if len(vals) == 2:
-            refs = [ref_path.strip() for ref_path in vals[1].split(',')]
+        if refs:
+            refs = [ref_path.strip() for ref_path in refs.split(',')]
             missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
             if len(missing_refs) > 0:
                 return error("Output '{}' set to missing references: '{}'.".format(
                     key, ', '.join(missing_refs)))
             file_obj['refs'] = refs
-        elif len(vals) >= 2:
-            return error("Only one colon ':' allowed in file.")
 
         file_list.append(file_obj)
 

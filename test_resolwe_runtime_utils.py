@@ -68,26 +68,27 @@ class TestGenSaveList(ResolweRuntimeUtilsTestCase):
 
 class TestGenSaveFile(ResolweRuntimeUtilsTestCase):
 
-    @patch('os.path.isdir', return_value=True)
     @patch('os.path.isfile', return_value=True)
-    def test_file(self, isfile_mock, isdir_mock):
-        self.assertEqual(save_file('etc', 'foo.py'),
-                         '{"etc": {"file": "foo.py"}}')
-        self.assertEqual(save_file('etc', 'foo bar.py'),
-                         '{"etc": {"file": "foo bar.py"}}')
+    def test_file(self, isfile_mock):
+        self.assertEqual(save_file('etc', 'foo.py'), '{"etc": {"file": "foo.py"}}')
+        self.assertEqual(save_file('etc', 'foo bar.py'), '{"etc": {"file": "foo bar.py"}}')
 
-    def test_file_missing(self):
+    @patch('os.path.isfile', return_value=True)
+    def test_file_with_refs(self, isfile_mock):
+        self.assertJSONEqual(save_file('etc', 'foo.py', 'ref1.txt', 'ref2.txt'),
+                             '{"etc": {"file": "foo.py", "refs": ["ref1.txt", "ref2.txt"]}}')
+
+    def test_missing_file(self):
         self.assertEqual(save_file('etc', 'foo.py'),
                          '{"proc.error": "Output \'etc\' set to a missing file: \'foo.py\'."}')
         self.assertEqual(save_file('etc', 'foo bar.py'),
                          '{"proc.error": "Output \'etc\' set to a missing file: \'foo bar.py\'."}')
 
-    @patch('os.path.isdir', return_value=True)
-    @patch('os.path.isfile', return_value=True)
-    def test_file_with_refs(self, isfile_mock, isdir_mock):
-        self.assertJSONEqual(
-            save_file('etc', 'foo.py', 'ref1.txt', 'ref2.txt'),
-            '{"etc": {"file": "foo.py", "refs": ["ref1.txt", "ref2.txt"]}}'
+    @patch('os.path.isfile', side_effect=[True, False, False])
+    def test_file_with_missing_refs(self, isfile_mock):
+        self.assertEqual(
+            save_file('src', 'foo.py', 'ref1.gz', 'ref2.gz'),
+            '{"proc.error": "Output \'src\' set to missing references: \'ref1.gz, ref2.gz\'."}'
         )
 
     def test_improper_input(self):
@@ -96,29 +97,40 @@ class TestGenSaveFile(ResolweRuntimeUtilsTestCase):
 
 class TestGenSaveFileList(ResolweRuntimeUtilsTestCase):
 
-    @patch('os.path.isdir', return_value=True)
     @patch('os.path.isfile', return_value=True)
-    def test_files(self, isfile_mock, isdir_mock):
+    def test_files(self, isfile_mock):
         self.assertEqual(
             save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'),
-            '{"src": [{"file": "foo.py"}, {"file": "bar 2.py"}, {"file": "baz/3.py"}]}')
+            '{"src": [{"file": "foo.py"}, {"file": "bar 2.py"}, {"file": "baz/3.py"}]}'
+        )
+
+    @patch('os.path.isfile', return_value=True)
+    def test_file_with_refs(self, isfile_mock):
+        self.assertJSONEqual(
+            save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'),
+            '{"src": [{"file": "foo.py", "refs": ["ref1.gz", "ref2.gz"]}, {"file": "bar.py"}]}'
+        )
 
     def test_missing_file(self):
         self.assertEqual(save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'),
-            '{"proc.error": "Output \'src\' set to a missing file: \'foo.py\'."}')
+                         '{"proc.error": "Output \'src\' set to a missing file: \'foo.py\'."}')
 
-    @patch('os.path.isdir', return_value=True)
-    @patch('os.path.isfile', return_value=True)
-    def test_file_with_refs(self, isfile_mock, isdir_mock):
-        self.assertJSONEqual(
-            save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'),
-            '{"src": [{"file": "foo.py", "refs": ["ref1.gz", "ref2.gz"]}, {"file": "bar.py"}]}')
+    def test_missing_file_with_refs(self):
+        self.assertEqual(save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'),
+                         '{"proc.error": "Output \'src\' set to a missing file: \'foo.py\'."}')
 
-    @patch('os.path.isdir', return_value=True)
-    @patch('os.path.isfile', return_value=True)
-    def test_files_invalid_format(self, isfile_mock, isdir_mock):
-        self.assertEqual(save_file_list('src', 'foo.py:ref1.gz:ref2.gz', 'bar.py'),
-            '{"proc.error": "Only one colon \':\' allowed in file."}')
+    @patch('os.path.isfile', side_effect=[True, False, False])
+    def test_file_with_missing_refs(self, isfile_mock):
+        self.assertEqual(
+            save_file_list('src', 'foo.py:ref1.gz,ref2.gz'),
+            '{"proc.error": "Output \'src\' set to missing references: \'ref1.gz, ref2.gz\'."}'
+        )
+
+    def test_files_invalid_format(self):
+        self.assertEqual(
+            save_file_list('src', 'foo.py:ref1.gz:ref2.gz', 'bar.py'),
+            '{"proc.error": "Only one colon \':\' allowed in file-refs specification."}'
+        )
 
 
 class TestGenInfo(ResolweRuntimeUtilsTestCase):
