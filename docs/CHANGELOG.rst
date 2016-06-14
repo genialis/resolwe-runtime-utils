@@ -30,3 +30,4 @@ Changed
   functions
 - Check if files exist before saving them
 - Save Resolwe errors instead of raising Python exceptions
+- Make ``checkrc`` and ``progress`` functions more robust to improper input

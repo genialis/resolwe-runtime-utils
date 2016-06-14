@@ -134,20 +134,16 @@ def progress(progress):
         {"proc.progress": progress}
 
     """
-    if isinstance(progress, str):
+    if isinstance(progress, int) or isinstance(progress, float):
+        progress = float(progress)
+    else:
         try:
-            progress = json.loads(progress)
-        except ValueError:
-            return warning("Progress must be float.")
+            progress = float(json.loads(progress))
+        except (TypeError, ValueError):
+            return warning("Progress must be a float.")
 
-    if isinstance(progress, int):
-        # cast to int first because bool isinstance int
-        progress = float(int(progress))
-    elif not isinstance(progress, float):
-        return warning("Progress must be float.")
-
-    if not 0 <= float(progress) <= 1:
-        return warning("Progress must be float between 0 and 1.")
+    if not 0 <= progress <= 1:
+        return warning("Progress must be a float between 0 and 1.")
 
     return json.dumps({'proc.progress': progress})
 
@@ -170,8 +166,8 @@ def checkrc(rc, *args):
     """
     try:
         rc = int(rc)
-    except TypeError:
-        return error("Return code must be integer.")
+    except (TypeError, ValueError):
+        return error("Invalid return code: '{}'.".format(rc))
 
     acceptable_rcs = []
     error_msg = ""
@@ -180,12 +176,12 @@ def checkrc(rc, *args):
         for code in args[:-1]:
             try:
                 acceptable_rcs.append(int(code))
-            except ValueError:
-                return error("Return codes must be integers.")
+            except (TypeError, ValueError):
+                return error("Invalid return code: '{}'.".format(code))
 
         try:
             acceptable_rcs.append(int(args[-1]))
-        except ValueError:
+        except (TypeError, ValueError):
             error_msg = args[-1]
 
     if rc in acceptable_rcs:

@@ -157,33 +157,46 @@ class TestGenProgress(ResolweRuntimeUtilsTestCase):
 
     def test_string(self):
         self.assertEqual(progress('0.1'), '{"proc.progress": 0.1}')
+        self.assertEqual(progress('0'), '{"proc.progress": 0.0}')
+        self.assertEqual(progress('1'), '{"proc.progress": 1.0}')
 
     def test_bool(self):
         self.assertEqual(progress(True), '{"proc.progress": 1.0}')
 
     def test_improper_input(self):
-        self.assertEqual(progress(None), '{"proc.warning": "Progress must be float."}')
-        self.assertEqual(progress('one'), '{"proc.warning": "Progress must be float."}')
+        self.assertEqual(progress(None), '{"proc.warning": "Progress must be a float."}')
+        self.assertEqual(progress('one'), '{"proc.warning": "Progress must be a float."}')
+        self.assertEqual(progress('[0.1]'), '{"proc.warning": "Progress must be a float."}')
         self.assertEqual(progress(-1),
-                         '{"proc.warning": "Progress must be float between 0 and 1."}')
+                         '{"proc.warning": "Progress must be a float between 0 and 1."}')
         self.assertEqual(progress(1.1),
-                         '{"proc.warning": "Progress must be float between 0 and 1."}')
+                         '{"proc.warning": "Progress must be a float between 0 and 1."}')
+        self.assertEqual(progress('1.1'),
+                         '{"proc.warning": "Progress must be a float between 0 and 1."}')
 
 
 class TestGenCheckRC(ResolweRuntimeUtilsTestCase):
 
     def test_valid_integers(self):
         self.assertEqual(checkrc(0), '{"proc.rc": 0}')
-        self.assertEqual(checkrc(2, 2, "Error"), '{"proc.rc": 0}')
-        self.assertJSONEqual(checkrc(1, 2, "Error"), '{"proc.rc": 1, "proc.error": "Error"}')
+        self.assertEqual(checkrc(2, 2, 'Error'), '{"proc.rc": 0}')
+        self.assertJSONEqual(checkrc(1, 2, 'Error'), '{"proc.rc": 1, "proc.error": "Error"}')
         self.assertEqual(checkrc(2, 2), '{"proc.rc": 0}')
         self.assertEqual(checkrc(1, 2), '{"proc.rc": 1}')
 
     def test_valid_strings(self):
         self.assertEqual(checkrc('0'), '{"proc.rc": 0}')
-        self.assertEqual(checkrc('2', '2', "Error"), '{"proc.rc": 0}')
-        self.assertJSONEqual(checkrc('1', '2', "Error"), '{"proc.rc": 1, "proc.error": "Error"}')
+        self.assertEqual(checkrc('2', '2', 'Error'), '{"proc.rc": 0}')
+        self.assertJSONEqual(checkrc('1', '2', 'Error'), '{"proc.rc": 1, "proc.error": "Error"}')
+
+    def test_error_message_not_string(self):
+        self.assertJSONEqual(checkrc(1, ['Error']),
+                '{"proc.rc": 1, "proc.error": ["Error"]}')
 
     def test_improper_input(self):
-        self.assertEqual(checkrc(None), '{"proc.error": "Return code must be integer."}')
-        self.assertEqual(checkrc(1, 'Foo', 'Bar'), '{"proc.error": "Return codes must be integers."}')
+        self.assertEqual(checkrc(None), '{"proc.error": "Invalid return code: \'None\'."}')
+        self.assertEqual(checkrc('foo'), '{"proc.error": "Invalid return code: \'foo\'."}')
+        self.assertEqual(checkrc(1, 'foo', 'Error'),
+                         '{"proc.error": "Invalid return code: \'foo\'."}')
+        self.assertEqual(checkrc(1, None, 'Error'),
+                         '{"proc.error": "Invalid return code: \'None\'."}')
