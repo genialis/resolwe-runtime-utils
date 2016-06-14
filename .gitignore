@@ -15,3 +15,6 @@ __pycache__/
 # ignore Coverage.py files
 .coverage
 htmlcov/
+
+# ignore pytest files
+.cache/
