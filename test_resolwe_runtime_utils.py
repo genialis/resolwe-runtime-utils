@@ -57,9 +57,11 @@ class TestGenSaveList(ResolweRuntimeUtilsTestCase):
                          '{"src": ["file1.txt", "file 2.txt"]}')
 
     def test_urls(self):
-        self.assertEqual(
-            save_list('urls', 'https://www.google.com', 'https://www.genialis.com'),
-            '{"urls": ["https://www.google.com", "https://www.genialis.com"]}'
+        self.assertJSONEqual(
+            save_list('urls', '{"name": "View", "url": "https://www.google.com"}',
+                      '{"name": "View", "url": "https://www.genialis.com"}'),
+            '{"urls": [{"url": "https://www.google.com", "name": "View"}, '
+            '{"url": "https://www.genialis.com", "name": "View"}]}'
         )
 
 

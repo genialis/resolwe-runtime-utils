@@ -19,6 +19,17 @@ Utility functions that make it easier to write a Resolwe process.
 import json
 
 
+def _get_json(value):
+    """Convert the given value to a JSON object."""
+    if hasattr(value, 'replace'):
+        value = value.replace('\n', ' ')
+    try:
+        return json.loads(value)
+    except ValueError:
+        # try putting the value into a string
+        return json.loads('"{}"'.format(value))
+
+
 def save(key, value):
     """Convert the given parameters to a JSON object.
 
@@ -27,13 +38,7 @@ def save(key, value):
     where value can represent any JSON object.
 
     """
-    value = value.replace('\n', ' ')
-    try:
-        value_json = json.loads(value)
-    except ValueError:
-        # try putting the value into a string
-        value_json = json.loads('"{}"'.format(value))
-    return json.dumps({key: value_json})
+    return json.dumps({key: _get_json(value)})
 
 
 def save_list(key, *values):
@@ -44,7 +49,7 @@ def save_list(key, *values):
     where values represent the given list of parameters.
 
     """
-    return json.dumps({key: values})
+    return json.dumps({key: [_get_json(value) for value in values]})
 
 
 def save_file(key, file_name, *refs):

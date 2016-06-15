@@ -26,3 +26,5 @@ Changed
 - Improve documentation
 - Use py.test as the test runner since its pytest-cov plugin enables to easily
   compute the test coverage while running the tests
+- Create ``_get_json`` auxiliary function use it in ``save`` and ``save_list``
+  functions
