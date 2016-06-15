@@ -27,7 +27,7 @@ class ResolweRuntimeUtilsTestCase(TestCase):
         self.assertEqual(json.loads(json_), json.loads(expected_json))
 
 
-class TestGenSave(ResolweRuntimeUtilsTestCase):
+class TestSave(ResolweRuntimeUtilsTestCase):
 
     def test_number(self):
         self.assertEqual(save('foo', '0'), '{"foo": 0}')
@@ -51,7 +51,7 @@ class TestGenSave(ResolweRuntimeUtilsTestCase):
         self.assertRaises(TypeError, save, 'etc', '{file:', 'foo.py}')
 
 
-class TestGenSaveList(ResolweRuntimeUtilsTestCase):
+class TestSaveList(ResolweRuntimeUtilsTestCase):
 
     def test_paths(self):
         self.assertEqual(save_list('src', 'file1.txt', 'file 2.txt'),
@@ -66,7 +66,7 @@ class TestGenSaveList(ResolweRuntimeUtilsTestCase):
         )
 
 
-class TestGenSaveFile(ResolweRuntimeUtilsTestCase):
+class TestSaveFile(ResolweRuntimeUtilsTestCase):
 
     @patch('os.path.isfile', return_value=True)
     def test_file(self, isfile_mock):
@@ -95,7 +95,7 @@ class TestGenSaveFile(ResolweRuntimeUtilsTestCase):
         self.assertRaises(TypeError, save_file, 'etc')
 
 
-class TestGenSaveFileList(ResolweRuntimeUtilsTestCase):
+class TestSaveFileList(ResolweRuntimeUtilsTestCase):
 
     @patch('os.path.isfile', return_value=True)
     def test_files(self, isfile_mock):
@@ -133,7 +133,7 @@ class TestGenSaveFileList(ResolweRuntimeUtilsTestCase):
         )
 
 
-class TestGenSaveDir(ResolweRuntimeUtilsTestCase):
+class TestSaveDir(ResolweRuntimeUtilsTestCase):
 
     @patch('os.path.isdir', return_value=True)
     def test_dir(self, isdir_mock):
@@ -164,7 +164,7 @@ class TestGenSaveDir(ResolweRuntimeUtilsTestCase):
         self.assertRaises(TypeError, save_dir, 'etc')
 
 
-class TestGenSaveDirList(ResolweRuntimeUtilsTestCase):
+class TestSaveDirList(ResolweRuntimeUtilsTestCase):
 
     @patch('os.path.isdir', return_value=True)
     def test_dirs(self, isdir_mock):
@@ -196,7 +196,7 @@ class TestGenSaveDirList(ResolweRuntimeUtilsTestCase):
         )
 
 
-class TestGenInfo(ResolweRuntimeUtilsTestCase):
+class TestInfo(ResolweRuntimeUtilsTestCase):
 
     def test_string(self):
         self.assertEqual(info('Some info'), '{"proc.info": "Some info"}')
@@ -205,7 +205,7 @@ class TestGenInfo(ResolweRuntimeUtilsTestCase):
         self.assertRaises(TypeError, info, 'First', 'Second')
 
 
-class TestGenWarning(ResolweRuntimeUtilsTestCase):
+class TestWarning(ResolweRuntimeUtilsTestCase):
 
     def test_string(self):
         self.assertEqual(warning('Some warning'), '{"proc.warning": "Some warning"}')
@@ -214,7 +214,7 @@ class TestGenWarning(ResolweRuntimeUtilsTestCase):
         self.assertRaises(TypeError, warning, 'First', 'Second')
 
 
-class TestGenError(ResolweRuntimeUtilsTestCase):
+class TestError(ResolweRuntimeUtilsTestCase):
 
     def test_string(self):
         self.assertEqual(error('Some error'), '{"proc.error": "Some error"}')
@@ -223,7 +223,7 @@ class TestGenError(ResolweRuntimeUtilsTestCase):
         self.assertRaises(TypeError, error, 'First', 'Second')
 
 
-class TestGenProgress(ResolweRuntimeUtilsTestCase):
+class TestProgress(ResolweRuntimeUtilsTestCase):
 
     def test_number(self):
         self.assertEqual(progress(0.1), '{"proc.progress": 0.1}')
@@ -250,7 +250,7 @@ class TestGenProgress(ResolweRuntimeUtilsTestCase):
                          '{"proc.warning": "Progress must be a float between 0 and 1."}')
 
 
-class TestGenCheckRC(ResolweRuntimeUtilsTestCase):
+class TestCheckRC(ResolweRuntimeUtilsTestCase):
 
     def test_valid_integers(self):
         self.assertEqual(checkrc(0), '{"proc.rc": 0}')
