@@ -136,25 +136,28 @@ class TestGenSaveFileList(ResolweRuntimeUtilsTestCase):
 class TestGenSaveDir(ResolweRuntimeUtilsTestCase):
 
     @patch('os.path.isdir', return_value=True)
-    @patch('os.path.isfile', return_value=True)
-    def test_file(self, isfile_mock, isdir_mock):
-        self.assertEqual(save_dir('etc', 'foo'),
-                         '{"etc": {"dir": "foo"}}')
-        self.assertEqual(save_dir('etc', 'foo bar'),
-                         '{"etc": {"dir": "foo bar"}}')
-
-    def test_file_missing(self):
-        self.assertEqual(save_dir('etc', 'foo'),
-                         '{"proc.error": "Output \'etc\' set to a missing directory: \'foo\'."}')
-        self.assertEqual(save_dir('etc', 'foo bar'),
-                         '{"proc.error": "Output \'etc\' set to a missing directory: \'foo bar\'."}')
+    def test_dir(self, isdir_mock):
+        self.assertEqual(save_dir('etc', 'foo'), '{"etc": {"dir": "foo"}}')
+        self.assertEqual(save_dir('etc', 'foo bar'), '{"etc": {"dir": "foo bar"}}')
 
     @patch('os.path.isdir', return_value=True)
-    @patch('os.path.isfile', return_value=True)
-    def test_file_with_refs(self, isfile_mock, isdir_mock):
-        self.assertJSONEqual(
-            save_dir('etc', 'foo', 'ref1.txt', 'ref2.txt'),
-            '{"etc": {"dir": "foo", "refs": ["ref1.txt", "ref2.txt"]}}'
+    def test_dir_with_refs(self, isdir_mock):
+        self.assertJSONEqual(save_dir('etc', 'foo', 'ref1.txt', 'ref2.txt'),
+                             '{"etc": {"dir": "foo", "refs": ["ref1.txt", "ref2.txt"]}}')
+
+    def test_missing_dir(self):
+        self.assertEqual(save_dir('etc', 'foo'),
+                         '{"proc.error": "Output \'etc\' set to a missing directory: \'foo\'."}')
+        self.assertEqual(
+            save_dir('etc', 'foo bar'),
+            '{"proc.error": "Output \'etc\' set to a missing directory: \'foo bar\'."}'
+        )
+
+    @patch('os.path.isdir', side_effect=[True, False, False])
+    def test_dir_with_missing_refs(self, isdir_mock):
+        self.assertEqual(
+            save_dir('etc', 'foo', 'ref1.gz', 'ref2.gz'),
+            '{"proc.error": "Output \'etc\' set to missing references: \'ref1.gz, ref2.gz\'."}'
         )
 
     def test_improper_input(self):
@@ -164,26 +167,33 @@ class TestGenSaveDir(ResolweRuntimeUtilsTestCase):
 class TestGenSaveDirList(ResolweRuntimeUtilsTestCase):
 
     @patch('os.path.isdir', return_value=True)
-    @patch('os.path.isfile', return_value=True)
-    def test_files(self, isfile_mock, isdir_mock):
+    def test_dirs(self, isdir_mock):
         self.assertEqual(save_dir_list('src', 'dir1', 'dir 2', 'dir/3'),
-            '{"src": [{"dir": "dir1"}, {"dir": "dir 2"}, {"dir": "dir/3"}]}')
-
-    def test_files_missing(self):
-        self.assertEqual(save_dir_list('src', 'dir1', 'dir 2', 'dir/3'),
-            '{"proc.error": "Output \'src\' set to a missing directory: \'dir1\'."}')
+                         '{"src": [{"dir": "dir1"}, {"dir": "dir 2"}, {"dir": "dir/3"}]}')
 
     @patch('os.path.isdir', return_value=True)
-    @patch('os.path.isfile', return_value=True)
-    def test_files_with_refs(self, isfile_mock, isdir_mock):
-        self.assertEqual(json.loads(save_dir_list('src', 'dir1:ref1.bar,ref2.bar,ref3.bar', 'dir2')),
-        {"src": [{"refs": ["ref1.bar", "ref2.bar", "ref3.bar"], "dir": "dir1"}, {"dir": "dir2"}]})
+    def test_dir_with_refs(self, isfile_mock):
+        self.assertJSONEqual(
+            save_dir_list('src', 'dir1:ref1.gz,ref2.gz', 'dir2'),
+            '{"src": [{"dir": "dir1", "refs": ["ref1.gz", "ref2.gz"]}, {"dir": "dir2"}]}'
+        )
 
-    @patch('os.path.isdir', return_value=True)
-    @patch('os.path.isfile', return_value=True)
-    def test_files_invalid_format(self, isfile_mock, isdir_mock):
-        self.assertEqual(save_dir_list('src', 'dir1:ref1.bar:ref2.bar', 'dir2'),
-        '{"proc.error": "Only one colon \':\' allowed in directory."}')
+    def test_missing_dir(self):
+        self.assertEqual(save_dir_list('src', 'dir1', 'dir 2', 'dir/3'),
+                         '{"proc.error": "Output \'src\' set to a missing directory: \'dir1\'."}')
+
+    @patch('os.path.isdir', side_effect=[True, False, False])
+    def test_dir_with_missing_refs(self, isdir_mock):
+        self.assertEqual(
+            save_dir_list('src', 'dir:ref1.gz,ref2.gz'),
+            '{"proc.error": "Output \'src\' set to missing references: \'ref1.gz, ref2.gz\'."}'
+        )
+
+    def test_files_invalid_format(self):
+        self.assertEqual(
+            save_dir_list('src', 'dir1:ref1.bar:ref2.bar', 'dir2'),
+            '{"proc.error": "Only one colon \':\' allowed in dir-refs specification."}'
+        )
 
 
 class TestGenInfo(ResolweRuntimeUtilsTestCase):
