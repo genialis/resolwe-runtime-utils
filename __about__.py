@@ -22,7 +22,7 @@ __git_repo_url__ = __url__
 
 # Semantic versioning is used. For more information see:
 # https://packaging.python.org/en/latest/distributing/#semantic-versioning-preferred
-__version__ = "0.2.0"
+__version__ = "1.0.0"
 
 __author__ = "The resolwe-runtime-utils authors"
 __email__ = "dev-team@genialis.com"
