@@ -15,6 +15,15 @@ Added
 - Add tests for all console commands (``TestConsoleCommands``)
 
 
+==========
+Unreleased
+==========
+
+Added
+-----
+- Add ``export`` function and console command
+
+
 ==================
 1.0.0 - 2016-06-16
 ==================

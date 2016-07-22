@@ -81,6 +81,7 @@ setup(
     entry_points={
         'console_scripts': [
             're-save = resolwe_runtime_utils:_re_save_main',
+            're-export = resolwe_runtime_utils:_re_export_main',
             're-save-list = resolwe_runtime_utils:_re_save_list_main',
             're-save-file = resolwe_runtime_utils:_re_save_file_main',
             're-save-file-list = resolwe_runtime_utils:_re_save_file_list_main',
