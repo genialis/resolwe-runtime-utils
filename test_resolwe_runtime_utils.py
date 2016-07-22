@@ -13,13 +13,19 @@
 # limitations under the License.
 
 # pylint: disable=missing-docstring
+from io import StringIO
 import json
+import sys
 from unittest import TestCase
 from unittest.mock import patch
 
 from resolwe_runtime_utils import (
-    save, save_list, save_file, save_dir, save_file_list,
-    save_dir_list, error, warning, info, progress, checkrc)
+    save, save_list, save_file, save_file_list, save_dir, save_dir_list,
+    info, warning, error, progress, checkrc,
+    _re_save_main, _re_save_list_main, _re_save_file_main, _re_save_file_list_main,
+    _re_save_dir_main, _re_save_dir_list_main, _re_info_main, _re_warning_main, _re_error_main,
+    _re_progress_main, _re_checkrc_main
+)
 
 
 class ResolweRuntimeUtilsTestCase(TestCase):
@@ -275,3 +281,77 @@ class TestCheckRC(ResolweRuntimeUtilsTestCase):
                          '{"proc.error": "Invalid return code: \'foo\'."}')
         self.assertEqual(checkrc(1, None, 'Error'),
                          '{"proc.error": "Invalid return code: \'None\'."}')
+
+class TestConsoleCommands(ResolweRuntimeUtilsTestCase):
+
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_save(self, stdout_mock):
+        with patch.object(sys, 'argv', ['_', 'foo.bar', '2']):
+            _re_save_main()
+            self.assertEqual(stdout_mock.getvalue(), '{"foo.bar": 2}\n')
+
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_save_list(self, stdout_mock):
+        with patch.object(sys, 'argv', ['_', 'foo.bar', '2', 'baz']):
+            _re_save_list_main()
+            self.assertEqual(stdout_mock.getvalue(), '{"foo.bar": [2, "baz"]}\n')
+
+    @patch('os.path.isfile', return_value=True)
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_save_file(self, stdout_mock, isfile_mock):
+        with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz.py']):
+            _re_save_file_main()
+            self.assertEqual(stdout_mock.getvalue(), '{"foo.bar": {"file": "baz.py"}}\n')
+
+    @patch('os.path.isfile', return_value=True)
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_save_file_list(self, stdout_mock, isfile_mock):
+        with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz.py', 'baz 2.py']):
+            _re_save_file_list_main()
+            self.assertEqual(stdout_mock.getvalue(),
+                             '{"foo.bar": [{"file": "baz.py"}, {"file": "baz 2.py"}]}\n')
+
+    @patch('os.path.isdir', return_value=True)
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_save_dir(self, stdout_mock, isdir_mock):
+        with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz']):
+            _re_save_dir_main()
+            self.assertEqual(stdout_mock.getvalue(), '{"foo.bar": {"dir": "baz"}}\n')
+
+    @patch('os.path.isdir', return_value=True)
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_save_dir_list(self, stdout_mock, isfile_mock):
+        with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz', 'baz 2']):
+            _re_save_dir_list_main()
+            self.assertEqual(stdout_mock.getvalue(),
+                             '{"foo.bar": [{"dir": "baz"}, {"dir": "baz 2"}]}\n')
+
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_info(self, stdout_mock):
+        with patch.object(sys, 'argv', ['_', 'some info']):
+            _re_info_main()
+            self.assertEqual(stdout_mock.getvalue(), '{"proc.info": "some info"}\n')
+
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_warning(self, stdout_mock):
+        with patch.object(sys, 'argv', ['_', 'some warning']):
+            _re_warning_main()
+            self.assertEqual(stdout_mock.getvalue(), '{"proc.warning": "some warning"}\n')
+
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_error(self, stdout_mock):
+        with patch.object(sys, 'argv', ['_', 'some error']):
+            _re_error_main()
+            self.assertEqual(stdout_mock.getvalue(), '{"proc.error": "some error"}\n')
+
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_progress(self, stdout_mock):
+        with patch.object(sys, 'argv', ['_', '0.7']):
+            _re_progress_main()
+            self.assertEqual(stdout_mock.getvalue(), '{"proc.progress": 0.7}\n')
+
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_checkrc(self, stdout_mock):
+        with patch.object(sys, 'argv', ['_', '1', '2', 'error']):
+            _re_checkrc_main()
+            self.assertJSONEqual(stdout_mock.getvalue(), '{"proc.rc": 1, "proc.error": "error"}\n')

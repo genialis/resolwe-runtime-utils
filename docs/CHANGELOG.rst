@@ -6,6 +6,14 @@ All notable changes to the |project_name| project will be documented in this
 file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
+==========
+Unreleased
+==========
+
+Added
+-----
+- Add tests for all console commands (``TestConsoleCommands``)
+
 
 ==================
 1.0.0 - 2016-06-16
