@@ -13,6 +13,7 @@ Unreleased
 Added
 -----
 - Add tests for all console commands (``TestConsoleCommands``)
+- Add ``export`` function and console command
 
 
 ==================

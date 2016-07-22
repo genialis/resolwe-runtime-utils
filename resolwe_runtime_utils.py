@@ -42,6 +42,15 @@ def save(key, value):
     return json.dumps({key: _get_json(value)})
 
 
+def export(file_path):
+    """Prepend the given parameter with ``export``"""
+
+    if not os.path.isfile(file_path):
+        return error("Referenced file does not exist: '{}'.".format(file_path))
+
+    return "export {}".format(file_path)
+
+
 def save_list(key, *values):
     """Convert the given list of parameters to a JSON object.
 
@@ -272,6 +281,10 @@ def _re_generic_main(fn):
 
 def _re_save_main():
     _re_generic_main(save)
+
+
+def _re_export_main():
+    _re_generic_main(export)
 
 
 def _re_save_list_main():

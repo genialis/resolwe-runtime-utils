@@ -20,9 +20,9 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from resolwe_runtime_utils import (
-    save, save_list, save_file, save_file_list, save_dir, save_dir_list,
+    save, export, save_list, save_file, save_file_list, save_dir, save_dir_list,
     info, warning, error, progress, checkrc,
-    _re_save_main, _re_save_list_main, _re_save_file_main, _re_save_file_list_main,
+    _re_save_main, _re_export_main, _re_save_list_main, _re_save_file_main, _re_save_file_list_main,
     _re_save_dir_main, _re_save_dir_list_main, _re_info_main, _re_warning_main, _re_error_main,
     _re_progress_main, _re_checkrc_main
 )
@@ -55,6 +55,21 @@ class TestSave(ResolweRuntimeUtilsTestCase):
         # Bash will split it into multiple arguments as shown with the test
         # case below.
         self.assertRaises(TypeError, save, 'etc', '{file:', 'foo.py}')
+
+
+class TestExport(ResolweRuntimeUtilsTestCase):
+
+    @patch('os.path.isfile', return_value=True)
+    def test_filename(self, isfile_mock):
+        self.assertEqual(export('foo.txt'), 'export foo.txt')
+
+    @patch('os.path.isfile', return_value=False)
+    def test_missing_file(self, isfile_mock):
+        self.assertEqual(export('foo.txt'),
+            '{"proc.error": "Referenced file does not exist: \'foo.txt\'."}')
+
+    def test_many_filenames(self):
+        self.assertRaises(TypeError, export, 'etc', 'foo.txt', 'bar.txt')
 
 
 class TestSaveList(ResolweRuntimeUtilsTestCase):
@@ -289,6 +304,13 @@ class TestConsoleCommands(ResolweRuntimeUtilsTestCase):
         with patch.object(sys, 'argv', ['_', 'foo.bar', '2']):
             _re_save_main()
             self.assertEqual(stdout_mock.getvalue(), '{"foo.bar": 2}\n')
+
+    @patch('os.path.isfile', return_value=True)
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_export(self, stdout_mock, isfile_mock):
+        with patch.object(sys, 'argv', ['_', 'foo.bar']):
+            _re_export_main()
+            self.assertEqual(stdout_mock.getvalue(), 'export foo.bar\n')
 
     @patch('sys.stdout', new_callable=StringIO)
     def test_re_save_list(self, stdout_mock):
