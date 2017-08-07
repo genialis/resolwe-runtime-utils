@@ -6,9 +6,9 @@ All notable changes to the |project_name| project will be documented in this
 file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
-==========
-Unreleased
-==========
+==================
+1.2.0 - 2017-08-08
+==================
 
 Changed
 -------
