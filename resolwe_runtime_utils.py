@@ -276,7 +276,10 @@ def checkrc(rc, *args):
 
 def _re_generic_main(fn):
     import sys
-    print(fn(*sys.argv[1:]))
+    try:
+        print(fn(*sys.argv[1:]))
+    except Exception as exc:
+        print(error("Unexpected error in '{}': {}".format(sys.argv[0], exc)))
 
 
 def _re_save_main():

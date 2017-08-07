@@ -6,6 +6,16 @@ All notable changes to the |project_name| project will be documented in this
 file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
+==========
+Unreleased
+==========
+
+Changed
+-------
+- Handle unexpected errors in re-* functions and print an error with a
+  descriptive message
+
+
 ==================
 1.1.0 - 2016-07-25
 ==================

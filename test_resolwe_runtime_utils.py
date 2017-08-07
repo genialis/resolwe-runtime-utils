@@ -300,6 +300,15 @@ class TestCheckRC(ResolweRuntimeUtilsTestCase):
 class TestConsoleCommands(ResolweRuntimeUtilsTestCase):
 
     @patch('sys.stdout', new_callable=StringIO)
+    def test_error_handling(self, stdout_mock):
+        with patch.object(sys, 'argv', ['re-save', 'test', '123', 'test', '345']):
+            _re_save_main()
+            self.assertEqual(
+                stdout_mock.getvalue(),
+                '{"proc.error": "Unexpected error in \'re-save\': save() takes 2 positional arguments but 4 were given"}\n'
+            )
+
+    @patch('sys.stdout', new_callable=StringIO)
     def test_re_save(self, stdout_mock):
         with patch.object(sys, 'argv', ['_', 'foo.bar', '2']):
             _re_save_main()
