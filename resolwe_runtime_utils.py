@@ -27,6 +27,9 @@ def _get_json(value):
     try:
         return json.loads(value)
     except ValueError:
+        # Escape double quotes.
+        if hasattr(value, 'replace'):
+            value = value.replace('"', '\\"')
         # try putting the value into a string
         return json.loads('"{}"'.format(value))
 

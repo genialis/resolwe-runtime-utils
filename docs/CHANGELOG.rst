@@ -14,6 +14,7 @@ Changed
 -------
 - Handle unexpected errors in re-* functions and print an error with a
   descriptive message
+- Escape double quotes in values of ``re-*`` commands
 
 
 ==================

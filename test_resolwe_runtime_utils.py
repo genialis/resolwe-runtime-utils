@@ -38,6 +38,9 @@ class TestSave(ResolweRuntimeUtilsTestCase):
     def test_number(self):
         self.assertEqual(save('foo', '0'), '{"foo": 0}')
 
+    def test_quote(self):
+        self.assertEqual(save('foo', '"'), '{"foo": "\\""}')
+
     def test_string(self):
         self.assertEqual(save('bar', 'baz'), '{"bar": "baz"}')
         self.assertEqual(save('proc.warning', 'Warning foo'),
