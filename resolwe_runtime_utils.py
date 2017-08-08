@@ -19,6 +19,10 @@ Utility functions that make it easier to write a Resolwe process.
 import json
 import os
 
+# Compat between Python 2.7/3.4 and Python 3.5
+if not hasattr(json, 'JSONDecodeError'):
+    json.JSONDecodeError = ValueError
+
 
 def _get_json(value):
     """Convert the given value to a JSON object."""
@@ -26,7 +30,7 @@ def _get_json(value):
         value = value.replace('\n', ' ')
     try:
         return json.loads(value)
-    except ValueError:
+    except json.JSONDecodeError:
         # Escape double quotes.
         if hasattr(value, 'replace'):
             value = value.replace('"', '\\"')
