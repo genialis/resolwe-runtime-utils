@@ -27,6 +27,8 @@ Resolwe Runtime Utilities
 A project that provides convenience utilities for writing processes for the
 Resolwe_ dataflow engine.
 
+The ``import_file`` function requires `7z` in path.
+
 You can find more information in the documentation_.
 
 .. _Resolwe: https://github.com/genialis/resolwe

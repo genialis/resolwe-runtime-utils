@@ -56,11 +56,19 @@ setuptools.setup(
     ],
     keywords='resolwe runtime utilities library',
     py_modules=['resolwe_runtime_utils'],
+    install_requires=['requests>=2.21'],
     extras_require={
         'dev': ['tox'],
         'docs': ['Sphinx', 'sphinx_rtd_theme'],
         'package': ['twine', 'wheel'],
-        'test': ['black', 'check-manifest', 'readme', 'pytest-cov', 'setuptools_scm'],
+        'test': [
+            'black',
+            'check-manifest',
+            'readme',
+            'pytest-cov',
+            'responses',
+            'setuptools_scm',
+        ],
     },
     entry_points={
         'console_scripts': [

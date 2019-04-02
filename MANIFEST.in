@@ -7,3 +7,4 @@ include docs/conf.py
 include AUTHORS LICENSE
 # Include files needed by tests
 include pyproject.toml
+recursive-include test_files *

@@ -6,6 +6,15 @@ All notable changes to the |project_name| project will be documented in this
 file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
+==========
+Unreleased
+==========
+Added
+-----
+- Add ``import_file`` that imports compressed (or not) files of various formats
+  to working directory.
+
+
 ==================
 1.2.0 - 2017-08-08
 ==================

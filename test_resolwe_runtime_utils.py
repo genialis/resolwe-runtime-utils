@@ -15,13 +15,20 @@
 # pylint: disable=missing-docstring
 from io import StringIO
 import json
+import os
+import shutil
 import sys
 from unittest import TestCase
 from unittest.mock import patch
 
+import responses
+import requests
+
 from resolwe_runtime_utils import (
     save,
     export,
+    import_file,
+    ImportedFormat,
     save_list,
     save_file,
     save_file_list,
@@ -45,6 +52,9 @@ from resolwe_runtime_utils import (
     _re_progress_main,
     _re_checkrc_main,
 )
+
+
+TEST_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
 class ResolweRuntimeUtilsTestCase(TestCase):
@@ -360,6 +370,163 @@ class TestCheckRC(ResolweRuntimeUtilsTestCase):
             checkrc(1, None, 'Error'),
             '{"proc.error": "Invalid return code: \'None\'."}',
         )
+
+
+class ImportFileTestCase(TestCase):
+
+    _test_data_dir = os.path.join(TEST_ROOT, '.test_data')
+
+    def setUp(self):
+        # Clean after terminated tests
+        shutil.rmtree(self._test_data_dir, ignore_errors=True)
+
+        os.mkdir(self._test_data_dir)
+        os.chdir(self._test_data_dir)
+
+    def tearDown(self):
+        os.chdir(TEST_ROOT)
+        shutil.rmtree(self._test_data_dir)
+
+    def _file(self, path):
+        """Add path prefix to test file."""
+        return os.path.join(TEST_ROOT, 'test_files', path)
+
+    def assertImportFile(self, src, dst, returned_name):
+        # Test both
+        src = self._file(src)
+        file_name = import_file(src, dst)
+        assert file_name == returned_name
+        assert os.path.exists(returned_name), "file not found"
+        assert os.path.exists(returned_name + '.gz'), "file not found"
+        os.remove(returned_name)
+        os.remove(returned_name + '.gz')
+
+        # Test extracted
+        file_name = import_file(src, dst, ImportedFormat.EXTRACTED)
+        assert file_name == returned_name
+        assert os.path.exists(returned_name), "file not found"
+        assert not os.path.exists(returned_name + '.gz'), "file should not exist"
+        os.remove(returned_name)
+
+        # Test compressed
+        file_name = import_file(src, dst, ImportedFormat.COMPRESSED)
+        assert file_name == returned_name + '.gz'
+        assert os.path.exists(returned_name + '.gz'), "file not found"
+        assert not os.path.exists(returned_name), "file should not exist"
+        os.remove(returned_name + '.gz')
+
+    def test_uncompressed(self):
+        self.assertImportFile(
+            'some file.1.txt', 'test uncompressed.txt', 'test uncompressed.txt'
+        )
+
+    def test_gz(self):
+        self.assertImportFile('some file.1.txt.gz', 'test gz.txt.gz', 'test gz.txt')
+
+    def test_7z(self):
+        self.assertImportFile('some file.1.txt.zip', 'test 7z.txt.zip', 'test 7z.txt')
+
+        file_name = import_file(self._file('some folder.tar.gz'), 'some folder.tar.gz')
+        assert file_name == 'some folder'
+        assert os.path.isdir('some folder'), "directory not found"
+        assert os.path.exists('some folder.tar.gz'), "file not found"
+        shutil.rmtree('some folder')
+        os.remove('some folder.tar.gz')
+
+        file_name = import_file(
+            self._file('some folder.tar.gz'),
+            'some folder.tar.gz',
+            ImportedFormat.COMPRESSED,
+        )
+        assert file_name == 'some folder.tar.gz'
+        assert not os.path.isdir('some folder'), "directory should not exist"
+        assert os.path.exists('some folder.tar.gz'), "file not found"
+
+        file_name = import_file(self._file('some folder 1.zip'), 'some folder 1.zip')
+        assert file_name == 'some folder 1'
+        assert os.path.isdir('some folder 1'), "directory not found"
+        assert os.path.exists('some folder 1.tar.gz'), "file not found"
+        shutil.rmtree('some folder 1')
+        os.remove('some folder 1.tar.gz')
+
+        file_name = import_file(
+            self._file('some folder 1.zip'),
+            'some folder 1.zip',
+            ImportedFormat.COMPRESSED,
+        )
+        assert file_name == 'some folder 1.tar.gz'
+        assert not os.path.isdir('some folder 1'), "directory should not exist"
+        assert os.path.exists('some folder 1.tar.gz'), "file not found"
+
+    def test_7z_corrupted(self):
+        with self.assertRaises(ValueError, msg='failed to extract file: corrupted.zip'):
+            import_file(self._file('corrupted.zip'), 'corrupted.zip')
+
+    def test_gz_corrupted(self):
+        with self.assertRaises(
+            ValueError, msg='invalid gzip file format: corrupted.gz'
+        ):
+            import_file(self._file('corrupted.gz'), 'corrupted.gz')
+
+        with self.assertRaises(
+            ValueError, msg='invalid gzip file format: corrupted.gz'
+        ):
+            import_file(
+                self._file('corrupted.gz'), 'corrupted.gz', ImportedFormat.COMPRESSED
+            )
+
+    @responses.activate
+    def test_uncompressed_url(self):
+        responses.add(
+            responses.GET, 'https://testurl/someslug', status=200, body='some text'
+        )
+
+        import_file('https://testurl/someslug', 'test uncompressed.txt')
+        assert os.path.exists('test uncompressed.txt'), "file not found"
+        assert os.path.exists('test uncompressed.txt.gz'), "file not found"
+
+    @responses.activate
+    def test_gz_url(self):
+        # Return gzipped file
+        responses.add(
+            responses.GET,
+            'https://testurl/someslug',
+            status=200,
+            body=bytes.fromhex(
+                '1f8b0808a6cea15c0003736f6d652066696c652e312e747874002bcecf4d'
+                '552849ad28e10200bce62c190a000000'
+            ),
+        )
+
+        import_file('https://testurl/someslug', 'test uncompressed.txt.gz')
+        assert os.path.exists('test uncompressed.txt'), "file not found"
+        assert os.path.exists('test uncompressed.txt.gz'), "file not found"
+
+    @responses.activate
+    def test_7z_url(self):
+        # Return zipped file
+        responses.add(
+            responses.GET,
+            'http://testurl/someslug',
+            status=200,
+            body=bytes.fromhex(
+                '504b03041400080008000c5b814e0000000000000000000000000f001000'
+                '736f6d652066696c652e312e74787455580c009fdaa15cc7d8a15cf50114'
+                '002bcecf4d552849ad28e10200504b0708bce62c190c0000000a00000050'
+                '4b010215031400080008000c5b814ebce62c190c0000000a0000000f000c'
+                '000000000000000040a48100000000736f6d652066696c652e312e747874'
+                '555808009fdaa15cc7d8a15c504b05060000000001000100490000005900'
+                '00000000'
+            ),
+        )
+
+        import_file('http://testurl/someslug', 'test uncompressed.txt.zip')
+        assert os.path.exists('test uncompressed.txt'), "file not found"
+        assert os.path.exists('test uncompressed.txt.gz'), "file not found"
+
+    def test_invalid_url(self):
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            import_file('http://testurl/someslug', 'test uncompressed.txt.zip')
 
 
 class TestConsoleCommands(ResolweRuntimeUtilsTestCase):
