@@ -35,8 +35,10 @@ jobs:
       env: TOX_ENV=py37
     - stage: test
       env: TOX_ENV=docs
+      after_success: skip
     - stage: test
       env: TOX_ENV=packaging
+      after_success: skip
 
     # NOTE: We undo/change all the global Travis CI step definitions to ensure
     # building of source and wheel distributions is performed in a clean
