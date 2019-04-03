@@ -83,10 +83,15 @@ def save_file(key, file_path, *refs):
     result = {key: {"file": file_path}}
 
     if refs:
-        missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
+        missing_refs = [
+            ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))
+        ]
         if len(missing_refs) > 0:
-            return error("Output '{}' set to missing references: '{}'.".format(
-                key, ', '.join(missing_refs)))
+            return error(
+                "Output '{}' set to missing references: '{}'.".format(
+                    key, ', '.join(missing_refs)
+                )
+            )
         result[key]['refs'] = refs
 
     return json.dumps(result)
@@ -114,15 +119,22 @@ def save_file_list(key, *files_refs):
         else:
             file_name, refs = file_refs, None
         if not os.path.isfile(file_name):
-            return error("Output '{}' set to a missing file: '{}'.".format(key, file_name))
+            return error(
+                "Output '{}' set to a missing file: '{}'.".format(key, file_name)
+            )
         file_obj = {'file': file_name}
 
         if refs:
             refs = [ref_path.strip() for ref_path in refs.split(',')]
-            missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
+            missing_refs = [
+                ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))
+            ]
             if len(missing_refs) > 0:
-                return error("Output '{}' set to missing references: '{}'.".format(
-                    key, ', '.join(missing_refs)))
+                return error(
+                    "Output '{}' set to missing references: '{}'.".format(
+                        key, ', '.join(missing_refs)
+                    )
+                )
             file_obj['refs'] = refs
 
         file_list.append(file_obj)
@@ -139,15 +151,22 @@ def save_dir(key, dir_path, *refs):
 
     """
     if not os.path.isdir(dir_path):
-        return error("Output '{}' set to a missing directory: '{}'.".format(key, dir_path))
+        return error(
+            "Output '{}' set to a missing directory: '{}'.".format(key, dir_path)
+        )
 
     result = {key: {"dir": dir_path}}
 
     if refs:
-        missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
+        missing_refs = [
+            ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))
+        ]
         if len(missing_refs) > 0:
-            return error("Output '{}' set to missing references: '{}'.".format(
-                key, ', '.join(missing_refs)))
+            return error(
+                "Output '{}' set to missing references: '{}'.".format(
+                    key, ', '.join(missing_refs)
+                )
+            )
         result[key]["refs"] = refs
 
     return json.dumps(result)
@@ -175,15 +194,22 @@ def save_dir_list(key, *dirs_refs):
         else:
             dir_path, refs = dir_refs, None
         if not os.path.isdir(dir_path):
-            return error("Output '{}' set to a missing directory: '{}'.".format(key, dir_path))
+            return error(
+                "Output '{}' set to a missing directory: '{}'.".format(key, dir_path)
+            )
         dir_obj = {'dir': dir_path}
 
         if refs:
             refs = [ref_path.strip() for ref_path in refs.split(',')]
-            missing_refs = [ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))]
+            missing_refs = [
+                ref for ref in refs if not (os.path.isfile(ref) or os.path.isdir(ref))
+            ]
             if len(missing_refs) > 0:
-                return error("Output '{}' set to missing references: '{}'.".format(
-                    key, ', '.join(missing_refs)))
+                return error(
+                    "Output '{}' set to missing references: '{}'.".format(
+                        key, ', '.join(missing_refs)
+                    )
+                )
             dir_obj['refs'] = refs
 
         dir_list.append(dir_obj)
@@ -281,8 +307,10 @@ def checkrc(rc, *args):
 # creation.                                                                   #
 ###############################################################################
 
+
 def _re_generic_main(fn):
     import sys
+
     try:
         print(fn(*sys.argv[1:]))
     except Exception as exc:
