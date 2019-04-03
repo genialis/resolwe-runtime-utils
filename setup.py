@@ -38,7 +38,7 @@ with open(path.join(here, '__about__.py'), encoding='utf-8') as f:
 setup(
     name=about['__name__'],
 
-    version=about['__version__'],
+    use_scm_version=True,
 
     description=about['__summary__'],
     long_description=long_description,
@@ -77,7 +77,7 @@ setup(
         'dev': ['tox'],
         'docs': ['Sphinx', 'sphinx_rtd_theme'],
         'package': ['twine', 'wheel'],
-        'test': ['check-manifest', 'readme', 'pytest-cov'],
+        'test': ['check-manifest', 'readme', 'pytest-cov', 'setuptools_scm'],
     },
 
     entry_points={

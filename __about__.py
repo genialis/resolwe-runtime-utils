@@ -14,15 +14,19 @@
 
 """Central place for package metadata."""
 
+from pkg_resources import DistributionNotFound, get_distribution
+
 __name__ = "resolwe-runtime-utils"
 __title__ = "Resolwe Runtime Utilities"
 __summary__ = "Runtime utilities for Resolwe dataflow engine"
 __url__ = "https://github.com/genialis/resolwe-runtime-utils"
 __git_repo_url__ = __url__
 
-# Semantic versioning is used. For more information see:
-# https://packaging.python.org/en/latest/distributing/#semantic-versioning-preferred
-__version__ = "1.2.0"
+try:
+    __version__ = get_distribution(__name__).version
+except DistributionNotFound:
+    # Package is not (yet) installed.
+    pass
 
 __author__ = "The resolwe-runtime-utils authors"
 __email__ = "dev-team@genialis.com"
