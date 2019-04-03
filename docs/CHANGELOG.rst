@@ -9,6 +9,12 @@ This project adheres to `Semantic Versioning <http://semver.org/>`_.
 ==========
 Unreleased
 ==========
+
+Changed
+-------
+- The ``export`` function was renamed to ``export_file`` to be consistent with
+  ``import_file``.
+
 Added
 -----
 - Add ``import_file`` that imports compressed (or not) files of various formats

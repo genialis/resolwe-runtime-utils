@@ -59,15 +59,6 @@ def save(key, value):
     return json.dumps({key: _get_json(value)})
 
 
-def export(file_path):
-    """Prepend the given parameter with ``export``"""
-
-    if not os.path.isfile(file_path):
-        return error("Referenced file does not exist: '{}'.".format(file_path))
-
-    return "export {}".format(file_path)
-
-
 def save_list(key, *values):
     """Convert the given list of parameters to a JSON object.
 
@@ -311,6 +302,15 @@ def checkrc(rc, *args):
     return json.dumps(ret)
 
 
+def export_file(file_path):
+    """Prepend the given parameter with ``export``"""
+
+    if not os.path.isfile(file_path):
+        return error("Referenced file does not exist: '{}'.".format(file_path))
+
+    return "export {}".format(file_path)
+
+
 CHUNK_SIZE = 10_000_000  # 10 Mbytes
 
 
@@ -551,7 +551,7 @@ def _re_save_main():
 
 
 def _re_export_main():
-    _re_generic_main(export)
+    _re_generic_main(export_file)
 
 
 def _re_save_list_main():

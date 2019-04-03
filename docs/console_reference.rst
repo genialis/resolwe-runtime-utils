@@ -9,7 +9,7 @@ List of console commands that can be used inside a Bash Resolwe process.
 
 .. describe:: re-export
 
-    A console wrapper for :func:`resolwe_runtime_utils.export`.
+    A console wrapper for :func:`resolwe_runtime_utils.export_file`.
 
 .. describe:: re-save-list
 

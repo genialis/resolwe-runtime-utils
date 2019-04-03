@@ -26,7 +26,7 @@ import requests
 
 from resolwe_runtime_utils import (
     save,
-    export,
+    export_file,
     import_file,
     ImportedFormat,
     save_list,
@@ -93,17 +93,17 @@ class TestSave(ResolweRuntimeUtilsTestCase):
 class TestExport(ResolweRuntimeUtilsTestCase):
     @patch('os.path.isfile', return_value=True)
     def test_filename(self, isfile_mock):
-        self.assertEqual(export('foo.txt'), 'export foo.txt')
+        self.assertEqual(export_file('foo.txt'), 'export foo.txt')
 
     @patch('os.path.isfile', return_value=False)
     def test_missing_file(self, isfile_mock):
         self.assertEqual(
-            export('foo.txt'),
+            export_file('foo.txt'),
             '{"proc.error": "Referenced file does not exist: \'foo.txt\'."}',
         )
 
     def test_many_filenames(self):
-        self.assertRaises(TypeError, export, 'etc', 'foo.txt', 'bar.txt')
+        self.assertRaises(TypeError, export_file, 'etc', 'foo.txt', 'bar.txt')
 
 
 class TestSaveList(ResolweRuntimeUtilsTestCase):
