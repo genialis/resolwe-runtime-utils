@@ -1,12 +1,15 @@
+# Global Travis CI step definitions that will be used by all jobs unless
+# explicitly overriden in the jobs.include matrix.
+
 language: python
-
-python: "3.5"
-
-env:
- - TOX_ENV=py34
- - TOX_ENV=py35
- - TOX_ENV=docs
- - TOX_ENV=packaging
+# NOTE: Apparently, Travis CI still hasn't strealined Python 3.7 support so
+# one has to resort to using the "unofficial" Ubuntu Xenial Xerus (16.04 LTS)
+# build environment and enable the "sudo" mode.
+# More details here:
+# - https://github.com/travis-ci/travis-ci/issues/9069#issuecomment-425720905
+# - https://github.com/travis-ci/travis-ci/issues/9815
+dist: xenial
+python: "3.7"
 
 install: pip install tox
 
@@ -15,3 +18,22 @@ script: tox -e $TOX_ENV
 after_success:
  - pip install codecov
  - codecov -e TOX_ENV
+
+ # Build stages.
+jobs:
+  include:
+    - stage: test
+      env: TOX_ENV=py34
+      python: "3.4"
+    - stage: test
+      env: TOX_ENV=py35
+      python: "3.5"
+    - stage: test
+      env: TOX_ENV=py36
+      python: "3.6"
+    - stage: test
+      env: TOX_ENV=py37
+    - stage: test
+      env: TOX_ENV=docs
+    - stage: test
+      env: TOX_ENV=packaging
