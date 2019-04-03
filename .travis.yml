@@ -37,3 +37,29 @@ jobs:
       env: TOX_ENV=docs
     - stage: test
       env: TOX_ENV=packaging
+
+    # NOTE: We undo/change all the global Travis CI step definitions to ensure
+    # building of source and wheel distributions is performed in a clean
+    # environment.
+    - stage: release
+      # Project uses setuptools_scm to determine the version from a SCM tag.
+      install: pip install setuptools_scm
+      script: skip
+      # NOTE: Due to the way Travis CI currently works, setting
+      # 'after_success: skip' would also result in skipping the deploy step.
+      # A work-around is to execute a dummy echo command.
+      # More info at: https://github.com/travis-ci/travis-ci/issues/8337.
+      after_success: echo "Skipping..."
+      deploy:
+        provider: pypi
+        user: genialis-bot
+        password:
+          secure: "gAhkuvk6Sjpw6EuVdgA8Ku9wjdk8001UyZSHryXUtiwfPmlSq1Xo72sV0hnqQ8eUOAtSJzhC3KG/KeM12D0mNAwQjHKWQQ4SByFJFkRwhNVAxTOweJRpvfcgstqGLJozf86dYKAawOVgqIA3L46SFmK1lW8TsgBlbhpkQBqS9icWVmr2h+35JIQkpz/VAc+NxFmovIl68xwLpGIEhYx62M+gw/3IXq/5eUCO6Xf9HxoV4UO6DFDIDaTYcJZ1Nrs0z4id6NUbo3yyd0rARf4b0o9w8+JIgbwpfiQR2xViKXTL9PZAq7qwPpqK24xnbeIj0gFawXJkV8NsfTlGgVmoI0M6vR7LIiIvOJA2TYQX7u+caw3PB80t0zKqoVVVXh5CIbYrlcGiXkD13J4C5YUGCMHRRBELREPjPcRd8HDu5Wd3znhZZM6MgayhKC7iPyM+AzXE9ubFTl4r8yNTlL32Nh6/ZxygTSbqKQoMeXe3IdnQbZcxBoUVWfk194NbHc89cb0Wncwk0ZUx5qCT8HC5+Wf4avxD+CXSyyXTKUn3M5SUV9XuLplM3pOZNpwrwCwI02/d2feryMILjThizuhjvIosxTFUxBdMo45OrhK8bBh1T2WALQCfi8zJjCq+E1zm5niY+/7bgfWoIwNcNIrO+ufBf/hzcOVSt9A4++DJs/M="
+        distributions: sdist bdist_wheel
+        on:
+          # Enable deploying tags. By default, Travis CI only deploys from the
+          # master branch.
+          tags: true
+      # Only build releases for tags starting with a Semantic Versioning 2.0
+      # compatible version.
+      if: tag =~ ^\d+\.\d+\.\d+

@@ -83,20 +83,14 @@ Building documentation
 Preparing release
 =================
 
-Clean ``build`` directory::
+Checkout the latest code and create a release branch::
 
-    python setup.py clean -a
+    git checkout master
+    git pull
+    git checkout -b release-<new-version>
 
-Remote previous distributions in ``dist`` directory::
-
-    rm dist/*
-
-Remove previous ``egg-info`` directory::
-
-    rm -r *.egg-info
-
-Bump project's version in ``__about__.py`` file and update the changelog in
-``docs/CHANGELOG.rst``.
+Replace the *Unreleased* heading in ``docs/CHANGELOG.rst`` with the new
+version, followed by release's date (e.g. *13.2.0 - 2018-10-23*).
 
 .. note::
 
@@ -106,29 +100,40 @@ Commit changes to git::
 
     git commit -a -m "Prepare release <new-version>"
 
-Test the new version with Tox_::
+Push changes to your fork and open a pull request::
 
-    tox -r
+    git push --set-upstream <fork-name> release-<new-version>
 
-Create source distribution::
+Wait for the tests to pass and the pull request to be approved. Merge the code
+to master::
 
-    python setup.py sdist
+    git checkout master
+    git merge --ff-only release-<new-version>
 
-Build wheel::
+Tag the new release from the latest commit::
 
-    python setup.py bdist_wheel
+    git checkout master
+    git tag -m "Version <new-version>" <new-version>
 
-Upload distribution to PyPI_::
+.. note::
 
-    twine upload dist/*
+    Project's version will be automatically inferred from the git tag using
+    `setuptools_scm`_.
 
-Tag the new version::
+Push the tag to the main Resolwe Runtime Utilities git repository::
 
-    git tag <new-version>
+    git push <upstream-name> master <new-version>
 
-Push changes to the main |project_git_repo_link|::
+The tagged code will we be released to PyPI automatically. Inspect Travis logs
+of the Release step if errors occur.
 
-   git push <resolwe-upstream-name> master <new-version>
+Preparing pre-release
+---------------------
+
+When preparing a pre-release (i.e. an alpha release), one can skip the
+"release" commit that updates the change log and just tag the desired commit
+with a pre-release tag (e.g. *13.3.0a1*). By pushing it to GitHub, the tagged
+code will be automatically tested by Travis CI and then released to PyPI.
 
 .. _Semantic versioning: https://packaging.python.org/en/latest/distributing/#semantic-versioning-preferred
-.. _PyPI: https://pypi.python.org/pypi/resolwe-runtime-utils
+.. _setuptools_scm: https://github.com/pypa/setuptools_scm/
