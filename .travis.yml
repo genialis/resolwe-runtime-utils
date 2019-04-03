@@ -37,6 +37,9 @@ jobs:
       env: TOX_ENV=docs
       after_success: skip
     - stage: test
+      env: TOX_ENV=linters
+      after_success: skip
+    - stage: test
       env: TOX_ENV=packaging
       after_success: skip
 

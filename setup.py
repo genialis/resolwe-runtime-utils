@@ -77,7 +77,7 @@ setup(
         'dev': ['tox'],
         'docs': ['Sphinx', 'sphinx_rtd_theme'],
         'package': ['twine', 'wheel'],
-        'test': ['check-manifest', 'readme', 'pytest-cov', 'setuptools_scm'],
+        'test': ['black', 'check-manifest', 'readme', 'pytest-cov', 'setuptools_scm'],
     },
 
     entry_points={
