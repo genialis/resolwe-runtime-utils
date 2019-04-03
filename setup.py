@@ -19,24 +19,21 @@ https://github.com/genialis/resolwe-runtime-utils
 https://github.com/genialis/resolwe
 """
 
-from setuptools import setup, find_packages
+import os.path
+import setuptools
 
-# Use codecs' open for a consistent encoding
-from codecs import open
-from os import path
-
-here = path.abspath(path.dirname(__file__))
+base_dir = os.path.abspath(os.path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
-    long_description = f.read()
+with open(os.path.join(base_dir, 'README.rst')) as fh:
+    long_description = fh.read()
 
 # Get package metadata from '__about__.py' file
 about = {}
-with open(path.join(here, '__about__.py'), encoding='utf-8') as f:
-    exec(f.read(), about)
+with open(os.path.join(base_dir, '__about__.py')) as fh:
+    exec(fh.read(), about)
 
-setup(
+setuptools.setup(
     name=about['__name__'],
     use_scm_version=True,
     description=about['__summary__'],
