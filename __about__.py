@@ -1,4 +1,4 @@
-# Copyright 2015 The resolwe-runtime-utils authors.
+# Copyright 2019 Genialis, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ except DistributionNotFound:
     # Package is not (yet) installed.
     pass
 
-__author__ = "The resolwe-runtime-utils authors"
+__author__ = "Genialis, Inc."
 __email__ = "dev-team@genialis.com"
 
 __license__ = "Apache License (2.0)"
-__copyright__ = "2015-2016, " + __author__
+__copyright__ = "2015-2019, " + __author__
