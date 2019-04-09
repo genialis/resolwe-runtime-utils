@@ -6,19 +6,20 @@ All notable changes to the |project_name| project will be documented in this
 file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
-==========
-Unreleased
-==========
+
+==================
+2.0.0 - 2019-04-09
+==================
 
 Changed
 -------
 - The ``export`` function was renamed to ``export_file`` to be consistent with
-  ``import_file``.
+  ``import_file``
 
 Added
 -----
 - Add ``import_file`` that imports compressed (or not) files of various formats
-  to working directory.
+  to working directory
 
 
 ==================
