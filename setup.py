@@ -56,7 +56,7 @@ setuptools.setup(
     ],
     keywords='resolwe runtime utilities library',
     py_modules=['resolwe_runtime_utils'],
-    install_requires=['requests>=2.21'],
+    install_requires=['requests>=2.20.1'],
     extras_require={
         'dev': ['tox'],
         'docs': ['Sphinx', 'sphinx_rtd_theme'],

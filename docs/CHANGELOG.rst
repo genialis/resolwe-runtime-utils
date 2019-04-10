@@ -8,6 +8,14 @@ This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
 ==================
+2.0.1 - 2019-04-10
+==================
+
+Changed
+-------
+- Loosen requests requirement to >=2.20.1
+
+==================
 2.0.0 - 2019-04-09
 ==================
 
