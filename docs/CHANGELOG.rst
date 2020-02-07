@@ -14,6 +14,7 @@ Unreleased
 Added
 -----
 - Add support for Python 3.8
+- Add ``re-annotate-entity`` command
 
 
 ==================

@@ -73,6 +73,7 @@ setuptools.setup(
     },
     entry_points={
         'console_scripts': [
+            're-annotate-entity = resolwe_runtime_utils:_re_annotate_entity_main',
             're-save = resolwe_runtime_utils:_re_save_main',
             're-export = resolwe_runtime_utils:_re_export_main',
             're-save-list = resolwe_runtime_utils:_re_save_list_main',

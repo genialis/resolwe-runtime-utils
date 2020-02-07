@@ -25,6 +25,7 @@ import responses
 import requests
 
 from resolwe_runtime_utils import (
+    annotate_entity,
     save,
     export_file,
     import_file,
@@ -39,6 +40,7 @@ from resolwe_runtime_utils import (
     error,
     progress,
     checkrc,
+    _re_annotate_entity_main,
     _re_save_main,
     _re_export_main,
     _re_save_list_main,
@@ -60,6 +62,11 @@ TEST_ROOT = os.path.abspath(os.path.dirname(__file__))
 class ResolweRuntimeUtilsTestCase(TestCase):
     def assertJSONEqual(self, json_, expected_json):  # pylint: disable=invalid-name
         self.assertEqual(json.loads(json_), json.loads(expected_json))
+
+
+class TestAnnotate(ResolweRuntimeUtilsTestCase):
+    def test_annotation(self):
+        self.assertEqual(annotate_entity('foo', '0'), '{"_entity.descriptor.foo": 0}')
 
 
 class TestSave(ResolweRuntimeUtilsTestCase):
@@ -530,6 +537,14 @@ class ImportFileTestCase(TestCase):
 
 
 class TestConsoleCommands(ResolweRuntimeUtilsTestCase):
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_re_annotate(self, stdout_mock):
+        with patch.object(sys, 'argv', ['_', 'foo.bar', '2']):
+            _re_annotate_entity_main()
+            self.assertEqual(
+                stdout_mock.getvalue(), '{"_entity.descriptor.foo.bar": 2}\n'
+            )
+
     @patch('sys.stdout', new_callable=StringIO)
     def test_error_handling(self, stdout_mock):
         with patch.object(sys, 'argv', ['re-save', 'test', '123', 'test', '345']):

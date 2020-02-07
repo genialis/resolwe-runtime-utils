@@ -70,6 +70,17 @@ def save_list(key, *values):
     return json.dumps({key: [_get_json(value) for value in values]})
 
 
+def annotate_entity(key, value):
+    """
+    Convert the given annotation to a JSON object.
+
+    JSON object is of the form:
+    { f"_entity.descriptor.{key}": value}.
+
+    """
+    return save("_entity.descriptor.{}".format(key), value)
+
+
 def save_file(key, file_path, *refs):
     """Convert the given parameters to a special JSON object.
 
@@ -544,6 +555,10 @@ def _re_generic_main(fn):
         print(fn(*sys.argv[1:]))
     except Exception as exc:
         print(error("Unexpected error in '{}': {}".format(sys.argv[0], exc)))
+
+
+def _re_annotate_entity_main():
+    _re_generic_main(annotate_entity)
 
 
 def _re_save_main():
