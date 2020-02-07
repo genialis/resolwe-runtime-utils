@@ -18,3 +18,11 @@ htmlcov/
 
 # ignore pytest files
 .cache/
+
+# Ignore project files
+*.pyproj
+*.sublime-project
+*.sublime-workspace
+sftp-config.json
+.idea
+.vscode
