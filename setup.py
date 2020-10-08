@@ -85,6 +85,7 @@ setuptools.setup(
             're-error = resolwe_runtime_utils:_re_error_main',
             're-info = resolwe_runtime_utils:_re_info_main',
             're-progress = resolwe_runtime_utils:_re_progress_main',
+            're-run = resolwe_runtime_utils:_re_run_main',
             '_re-checkrc = resolwe_runtime_utils:_re_checkrc_main',
         ]
     },

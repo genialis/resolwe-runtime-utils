@@ -322,6 +322,15 @@ def export_file(file_path):
     return "export {}".format(file_path)
 
 
+def run(process_slug, *inputs):
+    """Run process with the given slug with the given inputs.
+
+    Each input is of the form name:value.
+    """
+    inputs_dict = dict(mapping.split(":") for mapping in inputs)
+    return json.dumps({"process": process_slug, "input": inputs_dict})
+
+
 CHUNK_SIZE = 10_000_000  # 10 Mbytes
 
 

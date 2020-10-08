@@ -7,6 +7,14 @@ file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
+==========
+Unreleased
+==========
+
+Added
+-----
+- Add re-run command
+
 ==================
 2.1.0 - 2020-02-11
 ==================
