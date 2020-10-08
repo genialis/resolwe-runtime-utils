@@ -15,23 +15,114 @@
 """
 Utility functions that make it easier to write a Resolwe process.
 """
+import functools
 import glob
 import gzip
 import json
+import logging
 import os
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import tarfile
 import zlib
+import time
+from contextlib import suppress
+from itertools import chain
+from pathlib import Path
 
-import requests
+
+# Socket constants. The timeout is set to infinite.
+SOCKET_TIMEOUT = None
+if "SOCKET_TIMEOUT" in os.environ:
+    SOCKET_TIMEOUT = int(os.environ["SOCKET_TIMEOUT"])
+
+SOCKETS_PATH = Path(os.environ.get("SOCKETS_VOLUME", "/sockets"))
+COMMUNICATOR_SOCKET = SOCKETS_PATH / os.environ.get("SCRIPT_SOCKET", "_socket2.s")
+DATA_VOLUME = Path(os.environ.get("DATA_VOLUME", "/data"))
+
+logger = logging.getLogger(__name__)
 
 
 # Compat between Python 2.7/3.4 and Python 3.5
 if not hasattr(json, 'JSONDecodeError'):
     json.JSONDecodeError = ValueError
+
+
+def _retry(
+    max_retries=5,
+    retry_exceptions=(ConnectionError, FileNotFoundError),
+    min_sleep=1,
+    max_sleep=10,
+):
+    """Try to call decorated method max_retries times before giving up.
+
+    The calls are retried when function raises exception in retry_exceptions.
+
+    :param max_retries: maximal number of calls before giving up.
+    :param retry_exceptions: retry call if one of these exceptions is raised.
+    :param min_sleep: minimal sleep between calls (in seconds).
+    :param max_sleep: maximal sleep between calls (in seconds).
+    :returns: return value of the called method.
+    :raises: the last exceptions raised by the method call if none of the
+      retries were successfull.
+    """
+
+    def decorator_retry(func):
+        @functools.wraps(func)
+        def wrapper_retry(*args, **kwargs):
+            last_error = Exception("Retry failed")
+            sleep = 0
+            for retry in range(max_retries):
+                try:
+                    time.sleep(sleep)
+                    return func(*args, **kwargs)
+                except retry_exceptions as err:
+                    sleep = min(max_sleep, min_sleep * (2 ** retry))
+                    last_error = err
+            raise last_error
+
+        return wrapper_retry
+
+    return decorator_retry
+
+
+def _read_bytes(socket, message_size):
+    """Read message_size bytes from the given socket.
+
+    The method will block until enough bytes are available.
+
+    :param socket: the socket to read from.
+    :param message_size: size (in bytes) of the message to read.
+    :returns: received message.
+    """
+    message = b""
+    while len(message) < message_size:
+        received = socket.recv(message_size - len(message))
+        message += received
+        if not received:
+            return message
+    return message
+
+
+def _receive_data(socket, header_size=5):
+    """Recieve data over the given socket.
+
+    :param socket: the socket to read from.
+    :param header_size: how first many bytes in message are dedicated to the
+        message size (pre-padded with zeros).
+    """
+    message = _read_bytes(socket, header_size)
+    if not message:
+        return None
+    message_size = int(message)
+
+    message = _read_bytes(socket, message_size)
+    assert len(message) == message_size
+    data = json.loads(message.decode("utf-8"))
+    return data
 
 
 def _get_json(value):
@@ -48,51 +139,154 @@ def _get_json(value):
         return json.loads('"{}"'.format(value))
 
 
-def save(key, value):
-    """Convert the given parameters to a JSON object.
+def command(name, data):
+    """Create a command from command name and payload."""
+    return {"type": "COMMAND", "type_data": name, "data": data}
 
-    JSON object is of the form:
-    { key: value },
-    where value can represent any JSON object.
 
+def send_message(data, header_size=5):
+    """Send data over socket."""
+
+    @_retry()
+    def _connect(socket_path):
+        """Connect socket."""
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(socket_path)
+        sock.settimeout(SOCKET_TIMEOUT)
+        return sock
+
+    def _check_response(response):
+        if response is None:
+            raise RuntimeError(
+                "No response received when sending message: {}.".format(data)
+            )
+
+        if "type_data" not in response:
+            raise ValueError(
+                "Response {} does not contain key 'type_data'.".format(response)
+            )
+
+        return response["type_data"] == "OK"
+
+    try:
+        sock = _connect(str(COMMUNICATOR_SOCKET))
+        message = json.dumps(data).encode("utf-8")
+        message_length = "{length:0{size}d}".format(
+            length=len(message), size=header_size
+        ).encode("utf-8")
+        bytes_to_send = message_length + message
+        sock.sendall(bytes_to_send)
+        response = _receive_data(sock)
+        if not _check_response(response):
+            logger.error("Error in respone to %s: %s.", data, response)
+            raise RuntimeError("Wrong response received, terminating processing.")
+
+    finally:
+        with suppress(Exception):
+            sock.close()
+
+
+def _copy_file_or_dir(entries):
+    """Copy file and all its references to data_volume.
+
+    The entry is a path relative to the DATA_LOCAL_VOLUME (our working
+    directory). It must be copied to the DATA_VOLUME on the shared
+    filesystem.
     """
-    return json.dumps({key: _get_json(value)})
+    for entry in entries:
+        source = Path(entry)
+        destination = DATA_VOLUME / source
+        if not destination.parent.is_dir():
+            destination.parent.mkdir(parents=True)
+
+        if source.is_dir():
+            if not destination.exists():
+                shutil.copytree(str(source), str(destination))
+            else:
+                # If destination directory exists the copytree will fail.
+                # In such case perform a recursive call with entries in
+                # the source directory as arguments.
+                #
+                # TODO: fix when we support Python 3.8 and later. See
+                # dirs_exist_ok argument to copytree method.
+                _copy_file_or_dir(source.glob("*"))
+        elif source.is_file():
+            if not destination.parent.is_dir():
+                destination.parent.mkdir(parents=True)
+            # Use copy2 to preserve file metadata, such as file creation
+            # and modification times.
+            shutil.copy2(str(source), str(destination))
+
+
+def _copy_if_exists(data):
+    """Check if data output represents file.
+
+    And copy the file to the shared filesystem if this is the case.
+    """
+    if isinstance(data, dict):
+        if "file" in data:
+            _copy_file_or_dir(chain(data.get("refs", []), (data["file"],)))
+        if "dir" in data:
+            _copy_file_or_dir(chain(data.get("refs", []), (data["dir"],)))
+    # When saving 'storage' the second argument is a path to the JSON file.
+    # Copy the file to the shared filespace and hope there are not a lot of
+    # false hits.
+    if isinstance(data, str):
+        possible_file = Path(data)
+        if possible_file.is_file():
+            _copy_file_or_dir([possible_file])
+    return data
+
+
+def _get_dir_size(path):
+    """Get directory size.
+
+    :param path: a Path object pointing to the directory.
+    :type path: pathlib.Path
+    """
+    return sum(
+        file_.stat().st_size for file_ in Path(path).rglob("*") if file_.is_file()
+    )
+
+
+def _get_file_size(path):
+    """Get file size.
+
+    :param path: a Path object pointing to the file.
+    :type path: pathlib.Path
+    """
+    return path.stat().st_size
 
 
 def save_list(key, *values):
-    """Convert the given list of parameters to a JSON object.
-
-    JSON object is of the form:
-    { key: [values[0], values[1], ... ] },
-    where values represent the given list of parameters.
-
-    """
-    return json.dumps({key: [_get_json(value) for value in values]})
+    """Construct save_list command."""
+    return command(
+        "update_output", {key: [_copy_if_exists(_get_json(value)) for value in values]}
+    )
 
 
 def annotate_entity(key, value):
-    """
-    Convert the given annotation to a JSON object.
+    """Construct annotate entity command."""
+    return command("annotate", {key: _get_json(value)})
 
-    JSON object is of the form:
-    { f"_entity.descriptor.{key}": value}.
 
-    """
-    return save("_entity.descriptor.{}".format(key), value)
+def save(key, value):
+    """Construct save command."""
+    return command("update_output", {key: _copy_if_exists(_get_json(value))})
 
 
 def save_file(key, file_path, *refs):
-    """Convert the given parameters to a special JSON object.
+    """Construct save file command.
 
-    JSON object is of the form:
-    { key: {"file": file_path}}, or
-    { key: {"file": file_path, "refs": [refs[0], refs[1], ... ]}}
-
+    Data is of the form:
+    { key: {"file": file_path, "size": file_size}}, or
+    { key: {"file": file_path, "size": file_size, "refs": [refs[0], refs[1], ... ]}}
     """
-    if not os.path.isfile(file_path):
+    path = Path(file_path)
+    if not path.is_file():
         return error("Output '{}' set to a missing file: '{}'.".format(key, file_path))
 
-    result = {key: {"file": file_path}}
+    data = {"file": file_path, "size": _get_file_size(path)}
 
     if refs:
         missing_refs = [
@@ -104,19 +298,19 @@ def save_file(key, file_path, *refs):
                     key, ', '.join(missing_refs)
                 )
             )
-        result[key]['refs'] = refs
-
-    return json.dumps(result)
+        data['refs'] = refs
+    _copy_file_or_dir(chain(data.get("refs", []), (data["file"],)))
+    return command("update_output", {key: data})
 
 
 def save_file_list(key, *files_refs):
-    """Convert the given parameters to a special JSON object.
+    """Construct the save files command.
 
     Each parameter is a file-refs specification of the form:
     <file-path>:<reference1>,<reference2>, ...,
     where the colon ':' and the list of references are optional.
 
-    JSON object is of the form:
+    Data object is of the form:
     { key: {"file": file_path}}, or
     { key: {"file": file_path, "refs": [refs[0], refs[1], ... ]}}
 
@@ -130,11 +324,12 @@ def save_file_list(key, *files_refs):
                 return error("Only one colon ':' allowed in file-refs specification.")
         else:
             file_name, refs = file_refs, None
-        if not os.path.isfile(file_name):
+        path = Path(file_name)
+        if not path.is_file():
             return error(
                 "Output '{}' set to a missing file: '{}'.".format(key, file_name)
             )
-        file_obj = {'file': file_name}
+        file_obj = {'file': file_name, "size": _get_file_size(path)}
 
         if refs:
             refs = [ref_path.strip() for ref_path in refs.split(',')]
@@ -151,23 +346,26 @@ def save_file_list(key, *files_refs):
 
         file_list.append(file_obj)
 
-    return json.dumps({key: file_list})
+    for data in file_list:
+        _copy_file_or_dir(chain(data.get("refs", []), (data["file"],)))
+    return command("update_output", {key: file_list})
 
 
 def save_dir(key, dir_path, *refs):
-    """Convert the given parameters to a special JSON object.
+    """Construct save dir command.
 
-    JSON object is of the form:
+    Data object is of the form:
     { key: {"dir": dir_path}}, or
     { key: {"dir": dir_path, "refs": [refs[0], refs[1], ... ]}}
 
     """
-    if not os.path.isdir(dir_path):
+    path = Path(dir_path)
+    if not path.is_dir():
         return error(
             "Output '{}' set to a missing directory: '{}'.".format(key, dir_path)
         )
 
-    result = {key: {"dir": dir_path}}
+    result = {key: {"dir": dir_path, "size": _get_dir_size(path)}}
 
     if refs:
         missing_refs = [
@@ -181,17 +379,18 @@ def save_dir(key, dir_path, *refs):
             )
         result[key]["refs"] = refs
 
-    return json.dumps(result)
+    _copy_file_or_dir(chain(result[key].get("refs", []), (result[key]["dir"],)))
+    return command("update_output", result)
 
 
 def save_dir_list(key, *dirs_refs):
-    """Convert the given parameters to a special JSON object.
+    """Construct save dirs command.
 
     Each parameter is a dir-refs specification of the form:
     <dir-path>:<reference1>,<reference2>, ...,
     where the colon ':' and the list of references are optional.
 
-    JSON object is of the form:
+    Data object is of the form:
     { key: {"dir": dir_path}}, or
     { key: {"dir": dir_path, "refs": [refs[0], refs[1], ... ]}}
 
@@ -205,11 +404,13 @@ def save_dir_list(key, *dirs_refs):
                 return error("Only one colon ':' allowed in dir-refs specification.")
         else:
             dir_path, refs = dir_refs, None
-        if not os.path.isdir(dir_path):
+
+        path = Path(dir_path)
+        if not path.is_dir():
             return error(
                 "Output '{}' set to a missing directory: '{}'.".format(key, dir_path)
             )
-        dir_obj = {'dir': dir_path}
+        dir_obj = {'dir': dir_path, "size": _get_dir_size(path)}
 
         if refs:
             refs = [ref_path.strip() for ref_path in refs.split(',')]
@@ -226,32 +427,36 @@ def save_dir_list(key, *dirs_refs):
 
         dir_list.append(dir_obj)
 
-    return json.dumps({key: dir_list})
+    for entry in dir_list:
+        _copy_file_or_dir(chain(entry.get("refs", []), (entry["dir"],)))
+
+    return command("update_output", {key: dir_list})
+
+
+def _process_log(type, value):
+    """Construct general process_log command."""
+    return command("process_log", {type: value})
 
 
 def info(value):
-    """Call ``save`` function with "proc.info" as key."""
-    return save('proc.info', value)
+    """Construct info command."""
+    return _process_log("info", value)
 
 
 def warning(value):
-    """Call ``save`` function with "proc.warning" as key."""
-    return save('proc.warning', value)
+    """Construct warning command."""
+    return _process_log("warning", value)
 
 
 def error(value):
-    """Call ``save`` function with "proc.error" as key."""
-    return save('proc.error', value)
+    """Construct error command."""
+    return _process_log("error", value)
 
 
 def progress(progress):
-    """Convert given progress to a JSON object.
+    """Construct progress command.
 
-    Check that progress can be represented as float between 0 and 1 and
-    return it in JSON of the form:
-
-        {"proc.progress": progress}
-
+    Progress is reported as float between 0 and 1.
     """
     if isinstance(progress, int) or isinstance(progress, float):
         progress = float(progress)
@@ -264,7 +469,7 @@ def progress(progress):
     if not 0 <= progress <= 1:
         return warning("Progress must be a float between 0 and 1.")
 
-    return json.dumps({'proc.progress': progress})
+    return command("progress", progress)
 
 
 def checkrc(rc, *args):
@@ -306,32 +511,31 @@ def checkrc(rc, *args):
     if rc in acceptable_rcs:
         rc = 0
 
-    ret = {'proc.rc': rc}
+    changes = {"rc": rc}
     if rc and error_msg:
-        ret['proc.error'] = error_msg
+        changes["error"] = error_msg
 
-    return json.dumps(ret)
+    return command("update_rc", changes)
 
 
 def export_file(file_path):
-    """Prepend the given parameter with ``export``"""
+    """Construct export command."""
 
     if not os.path.isfile(file_path):
         return error("Referenced file does not exist: '{}'.".format(file_path))
 
-    return "export {}".format(file_path)
+    return command("export_files", [file_path])
 
 
-def run(process_slug, *inputs):
+def run(process_slug, run):
     """Run process with the given slug with the given inputs.
 
-    Each input is of the form name:value.
+    The argument run must be a valid JSON string representing the inputs.
     """
-    inputs_dict = dict(mapping.split(":") for mapping in inputs)
-    return json.dumps({"process": process_slug, "input": inputs_dict})
+    return command("run", {"process": process_slug, "input": _get_json(run)})
 
 
-CHUNK_SIZE = 10_000_000  # 10 Mbytes
+CHUNK_SIZE = 10000000  # 10 Mbytes
 
 
 class ImportedFormat:
@@ -358,6 +562,8 @@ def import_file(
     :param progress_to: Final progress value
     :return: Destination file path (if extracted and compressed, extracted path given)
     """
+
+    import requests
 
     if progress_to is not None:
         if not isinstance(progress_from, float) or not isinstance(progress_to, float):
@@ -524,7 +730,7 @@ def import_file(
                     next_progress = round(next_progress, 2)
 
                     if next_progress > current_progress:
-                        print(progress(next_progress))
+                        send_message(progress(next_progress))
                         current_progress = next_progress
 
         # Check if a temporary file exists.
@@ -545,7 +751,7 @@ def import_file(
         destination_file_name = importUncompressed()
 
     if progress_to is not None:
-        print(progress(progress_to))
+        send_message(progress(progress_to))
 
     return destination_file_name
 
@@ -558,12 +764,15 @@ def import_file(
 
 
 def _re_generic_main(fn):
+    """Main method."""
     import sys
 
     try:
-        print(fn(*sys.argv[1:]))
+        data = fn(*sys.argv[1:])
     except Exception as exc:
-        print(error("Unexpected error in '{}': {}".format(sys.argv[0], exc)))
+        data = error("Unexpected error in '{}': {}".format(sys.argv[0], exc))
+    # Send data to the communication container.
+    send_message(data)
 
 
 def _re_annotate_entity_main():
@@ -572,6 +781,10 @@ def _re_annotate_entity_main():
 
 def _re_save_main():
     _re_generic_main(save)
+
+
+def _re_run_main():
+    _re_generic_main(run)
 
 
 def _re_export_main():

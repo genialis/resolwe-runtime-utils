@@ -17,7 +17,12 @@ from io import StringIO
 import json
 import os
 import shutil
+import socket
 import sys
+import tempfile
+import time
+from pathlib import Path
+from threading import Thread
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -26,6 +31,7 @@ import requests
 
 from resolwe_runtime_utils import (
     annotate_entity,
+    send_message,
     save,
     export_file,
     import_file,
@@ -66,27 +72,43 @@ class ResolweRuntimeUtilsTestCase(TestCase):
 
 class TestAnnotate(ResolweRuntimeUtilsTestCase):
     def test_annotation(self):
-        self.assertEqual(annotate_entity('foo', '0'), '{"_entity.descriptor.foo": 0}')
+        expected = {'type': 'COMMAND', 'type_data': 'annotate', 'data': {'foo': 0}}
+        self.assertEqual(annotate_entity('foo', '0'), expected)
 
 
 class TestSave(ResolweRuntimeUtilsTestCase):
     def test_number(self):
-        self.assertEqual(save('foo', '0'), '{"foo": 0}')
+        expected = {'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo': 0}}
+        self.assertEqual(save('foo', '0'), expected)
 
     def test_quote(self):
-        self.assertEqual(save('foo', '"'), '{"foo": "\\""}')
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {'foo': '"'},
+        }
+        self.assertEqual(save('foo', '"'), expected)
 
     def test_string(self):
-        self.assertEqual(save('bar', 'baz'), '{"bar": "baz"}')
-        self.assertEqual(
-            save('proc.warning', 'Warning foo'), '{"proc.warning": "Warning foo"}'
-        )
-        self.assertEqual(save('number', '"0"'), '{"number": "0"}')
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {'bar': 'baz'},
+        }
+        self.assertEqual(save('bar', 'baz'), expected)
+        expected["data"] = {'proc.warning': 'Warning foo'}
+        self.assertEqual(save('proc.warning', 'Warning foo'), expected)
+        expected["data"] = {'number': "0"}
+        self.assertEqual(save('number', '"0"'), expected)
 
-    def test_hash(self):
-        self.assertEqual(
-            save('etc', '{"file": "foo.py"}'), '{"etc": {"file": "foo.py"}}'
-        )
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    def test_hash(self, copy_mock):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {'etc': {'file': 'foo.py'}},
+        }
+        self.assertEqual(save('etc', '{"file": "foo.py"}'), expected)
 
     def test_improper_input(self):
         self.assertRaises(TypeError, save, 'proc.rc')
@@ -100,13 +122,19 @@ class TestSave(ResolweRuntimeUtilsTestCase):
 class TestExport(ResolweRuntimeUtilsTestCase):
     @patch('os.path.isfile', return_value=True)
     def test_filename(self, isfile_mock):
-        self.assertEqual(export_file('foo.txt'), 'export foo.txt')
+        expected = {'type': 'COMMAND', 'type_data': 'export_files', 'data': ['foo.txt']}
+        self.assertEqual(export_file('foo.txt'), expected)
 
     @patch('os.path.isfile', return_value=False)
     def test_missing_file(self, isfile_mock):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Referenced file does not exist: 'foo.txt'."},
+        }
         self.assertEqual(
             export_file('foo.txt'),
-            '{"proc.error": "Referenced file does not exist: \'foo.txt\'."}',
+            expected,
         )
 
     def test_many_filenames(self):
@@ -115,172 +143,330 @@ class TestExport(ResolweRuntimeUtilsTestCase):
 
 class TestSaveList(ResolweRuntimeUtilsTestCase):
     def test_paths(self):
-        self.assertEqual(
-            save_list('src', 'file1.txt', 'file 2.txt'),
-            '{"src": ["file1.txt", "file 2.txt"]}',
-        )
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {'src': ['file1.txt', 'file 2.txt']},
+        }
+        self.assertEqual(save_list('src', 'file1.txt', 'file 2.txt'), expected)
 
     def test_urls(self):
-        self.assertJSONEqual(
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {
+                'urls': [
+                    {'name': 'View', 'url': 'https://www.google.com'},
+                    {'name': 'View', 'url': 'https://www.genialis.com'},
+                ]
+            },
+        }
+        self.assertEqual(
             save_list(
                 'urls',
                 '{"name": "View", "url": "https://www.google.com"}',
                 '{"name": "View", "url": "https://www.genialis.com"}',
             ),
-            '{"urls": [{"url": "https://www.google.com", "name": "View"}, '
-            '{"url": "https://www.genialis.com", "name": "View"}]}',
+            expected,
         )
 
 
 class TestSaveFile(ResolweRuntimeUtilsTestCase):
+    @patch('resolwe_runtime_utils._get_file_size', return_value=42)
+    @patch('resolwe_runtime_utils.Path')
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
     @patch('os.path.isfile', return_value=True)
-    def test_file(self, isfile_mock):
-        self.assertEqual(save_file('etc', 'foo.py'), '{"etc": {"file": "foo.py"}}')
-        self.assertEqual(
-            save_file('etc', 'foo bar.py'), '{"etc": {"file": "foo bar.py"}}'
-        )
+    def test_file(self, isfile_mock, copy_mock, path_mock, size_mock):
+        path_mock.is_file.return_value = True
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {'etc': {'file': 'foo.py', 'size': 42}},
+        }
+        self.assertEqual(save_file('etc', 'foo.py'), expected)
+        expected["data"]["etc"]["file"] = "foo bar.py"
+        self.assertEqual(save_file('etc', 'foo bar.py'), expected)
 
+    @patch('resolwe_runtime_utils._get_file_size', return_value=42)
+    @patch('resolwe_runtime_utils.Path')
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
     @patch('os.path.isfile', return_value=True)
-    def test_file_with_refs(self, isfile_mock):
-        self.assertJSONEqual(
+    def test_file_with_refs(self, isfile_mock, copy_mock, path_mock, size_mock):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {
+                'etc': {'file': 'foo.py', 'size': 42, 'refs': ('ref1.txt', 'ref2.txt')}
+            },
+        }
+        self.assertEqual(
             save_file('etc', 'foo.py', 'ref1.txt', 'ref2.txt'),
-            '{"etc": {"file": "foo.py", "refs": ["ref1.txt", "ref2.txt"]}}',
+            expected,
         )
 
     def test_missing_file(self):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Output 'etc' set to a missing file: 'foo.py'."},
+        }
         self.assertEqual(
             save_file('etc', 'foo.py'),
-            '{"proc.error": "Output \'etc\' set to a missing file: \'foo.py\'."}',
+            expected,
         )
-        self.assertEqual(
-            save_file('etc', 'foo bar.py'),
-            '{"proc.error": "Output \'etc\' set to a missing file: \'foo bar.py\'."}',
-        )
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Output 'etc' set to a missing file: 'foo bar.py'."},
+        }
+        self.assertEqual(save_file('etc', 'foo bar.py'), expected)
 
-    @patch('os.path.isfile', side_effect=[True, False, False])
-    def test_file_with_missing_refs(self, isfile_mock):
-        self.assertEqual(
-            save_file('src', 'foo.py', 'ref1.gz', 'ref2.gz'),
-            '{"proc.error": "Output \'src\' set to missing references: \'ref1.gz, ref2.gz\'."}',
-        )
+    @patch('resolwe_runtime_utils.Path')
+    @patch('os.path.isfile', side_effect=[False, False])
+    def test_file_with_missing_refs(self, isfile_mock, path_mock):
+        path_mock.is_file.return_value = True
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {
+                'error': "Output 'src' set to missing references: 'ref1.gz, ref2.gz'."
+            },
+        }
+        self.assertEqual(save_file('src', 'foo.py', 'ref1.gz', 'ref2.gz'), expected)
 
     def test_improper_input(self):
         self.assertRaises(TypeError, save_file, 'etc')
 
 
 class TestSaveFileList(ResolweRuntimeUtilsTestCase):
-    @patch('os.path.isfile', return_value=True)
-    def test_files(self, isfile_mock):
+    @patch('resolwe_runtime_utils._get_file_size', side_effect=[1, 2, 3])
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.Path')
+    def test_files(self, path_mock, copy_mock, size_mock):
+        path_mock.is_file.return_value = True
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {
+                'src': [
+                    {'file': 'foo.py', 'size': 1},
+                    {'file': 'bar 2.py', 'size': 2},
+                    {'file': 'baz/3.py', 'size': 3},
+                ]
+            },
+        }
         self.assertEqual(
-            save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'),
-            '{"src": [{"file": "foo.py"}, {"file": "bar 2.py"}, {"file": "baz/3.py"}]}',
+            save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'), expected
         )
 
+    @patch('resolwe_runtime_utils._get_file_size', side_effect=[1, 2])
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isfile', return_value=True)
-    def test_file_with_refs(self, isfile_mock):
-        self.assertJSONEqual(
-            save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'),
-            '{"src": [{"file": "foo.py", "refs": ["ref1.gz", "ref2.gz"]}, {"file": "bar.py"}]}',
+    def test_file_with_refs(self, isfile_mock, path_mock, copy_mock, size_mock):
+        path_mock.is_file.return_value = True
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {
+                'src': [
+                    {'file': 'foo.py', 'size': 1, 'refs': ['ref1.gz', 'ref2.gz']},
+                    {'file': 'bar.py', 'size': 2},
+                ]
+            },
+        }
+        self.assertEqual(
+            save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'), expected
         )
 
     def test_missing_file(self):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Output 'src' set to a missing file: 'foo.py'."},
+        }
         self.assertEqual(
-            save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'),
-            '{"proc.error": "Output \'src\' set to a missing file: \'foo.py\'."}',
+            save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'), expected
         )
 
     def test_missing_file_with_refs(self):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Output 'src' set to a missing file: 'foo.py'."},
+        }
         self.assertEqual(
-            save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'),
-            '{"proc.error": "Output \'src\' set to a missing file: \'foo.py\'."}',
+            save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'), expected
         )
 
-    @patch('os.path.isfile', side_effect=[True, False, False])
-    def test_file_with_missing_refs(self, isfile_mock):
-        self.assertEqual(
-            save_file_list('src', 'foo.py:ref1.gz,ref2.gz'),
-            '{"proc.error": "Output \'src\' set to missing references: \'ref1.gz, ref2.gz\'."}',
-        )
+    @patch('resolwe_runtime_utils._get_file_size', side_effect=[1, 2])
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.Path')
+    @patch('os.path.isfile', side_effect=[False, False])
+    def test_file_with_missing_refs(self, isfile_mock, path_mock, copy_mock, size_mock):
+        path_mock.is_file.return_value = True
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {
+                'error': "Output 'src' set to missing references: 'ref1.gz, ref2.gz'."
+            },
+        }
+        self.assertEqual(save_file_list('src', 'foo.py:ref1.gz,ref2.gz'), expected)
 
     def test_files_invalid_format(self):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Only one colon ':' allowed in file-refs specification."},
+        }
         self.assertEqual(
             save_file_list('src', 'foo.py:ref1.gz:ref2.gz', 'bar.py'),
-            '{"proc.error": "Only one colon \':\' allowed in file-refs specification."}',
+            expected,
         )
 
 
 class TestSaveDir(ResolweRuntimeUtilsTestCase):
-    @patch('os.path.isdir', return_value=True)
-    def test_dir(self, isdir_mock):
-        self.assertEqual(save_dir('etc', 'foo'), '{"etc": {"dir": "foo"}}')
-        self.assertEqual(save_dir('etc', 'foo bar'), '{"etc": {"dir": "foo bar"}}')
+    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.Path')
+    def test_dir(self, path_mock, copy_mock, dir_size_mock):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {'etc': {'dir': 'foo', 'size': 42}},
+        }
+        self.assertEqual(save_dir('etc', 'foo'), expected)
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {'etc': {'dir': 'foo bar', 'size': 42}},
+        }
+        self.assertEqual(save_dir('etc', 'foo bar'), expected)
 
+    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
-    def test_dir_with_refs(self, isdir_mock):
-        self.assertJSONEqual(
-            save_dir('etc', 'foo', 'ref1.txt', 'ref2.txt'),
-            '{"etc": {"dir": "foo", "refs": ["ref1.txt", "ref2.txt"]}}',
-        )
+    def test_dir_with_refs(self, isdir_mock, path_mock, copy_mock, dir_size_mock):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {
+                'etc': {'dir': 'foo', 'size': 42, 'refs': ('ref1.txt', 'ref2.txt')}
+            },
+        }
+        self.assertEqual(save_dir('etc', 'foo', 'ref1.txt', 'ref2.txt'), expected)
 
     def test_missing_dir(self):
-        self.assertEqual(
-            save_dir('etc', 'foo'),
-            '{"proc.error": "Output \'etc\' set to a missing directory: \'foo\'."}',
-        )
-        self.assertEqual(
-            save_dir('etc', 'foo bar'),
-            '{"proc.error": "Output \'etc\' set to a missing directory: \'foo bar\'."}',
-        )
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Output 'etc' set to a missing directory: 'foo'."},
+        }
+        self.assertEqual(save_dir('etc', 'foo'), expected)
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Output 'etc' set to a missing directory: 'foo bar'."},
+        }
+        self.assertEqual(save_dir('etc', 'foo bar'), expected)
 
-    @patch('os.path.isdir', side_effect=[True, False, False])
-    def test_dir_with_missing_refs(self, isdir_mock):
-        self.assertEqual(
-            save_dir('etc', 'foo', 'ref1.gz', 'ref2.gz'),
-            '{"proc.error": "Output \'etc\' set to missing references: \'ref1.gz, ref2.gz\'."}',
-        )
+    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.Path')
+    @patch('os.path.isdir', side_effect=[False, False])
+    def test_dir_with_missing_refs(
+        self, isdir_mock, path_mock, copy_mock, dir_size_mock
+    ):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {
+                'error': "Output 'etc' set to missing references: 'ref1.gz, ref2.gz'."
+            },
+        }
+        self.assertEqual(save_dir('etc', 'foo', 'ref1.gz', 'ref2.gz'), expected)
 
     def test_improper_input(self):
         self.assertRaises(TypeError, save_dir, 'etc')
 
 
 class TestSaveDirList(ResolweRuntimeUtilsTestCase):
+    @patch('resolwe_runtime_utils._get_dir_size', side_effect=[1, 2, 3])
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
-    def test_dirs(self, isdir_mock):
-        self.assertEqual(
-            save_dir_list('src', 'dir1', 'dir 2', 'dir/3'),
-            '{"src": [{"dir": "dir1"}, {"dir": "dir 2"}, {"dir": "dir/3"}]}',
-        )
+    def test_dirs(self, isdir_mock, path_mock, copy_mock, dir_size_mock):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {
+                'src': [
+                    {'dir': 'dir1', 'size': 1},
+                    {'dir': 'dir 2', 'size': 2},
+                    {'dir': 'dir/3', 'size': 3},
+                ]
+            },
+        }
+        self.assertEqual(save_dir_list('src', 'dir1', 'dir 2', 'dir/3'), expected)
 
+    @patch('resolwe_runtime_utils._get_dir_size', side_effect=[1, 2])
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
-    def test_dir_with_refs(self, isfile_mock):
-        self.assertJSONEqual(
-            save_dir_list('src', 'dir1:ref1.gz,ref2.gz', 'dir2'),
-            '{"src": [{"dir": "dir1", "refs": ["ref1.gz", "ref2.gz"]}, {"dir": "dir2"}]}',
-        )
+    def test_dir_with_refs(self, isdir_mock, path_mock, copy_mock, dir_size_mock):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_output',
+            'data': {
+                'src': [
+                    {'dir': 'dir1', 'size': 1, 'refs': ['ref1.gz', 'ref2.gz']},
+                    {'dir': 'dir2', 'size': 2},
+                ]
+            },
+        }
+        self.assertEqual(save_dir_list('src', 'dir1:ref1.gz,ref2.gz', 'dir2'), expected)
 
     def test_missing_dir(self):
-        self.assertEqual(
-            save_dir_list('src', 'dir1', 'dir 2', 'dir/3'),
-            '{"proc.error": "Output \'src\' set to a missing directory: \'dir1\'."}',
-        )
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Output 'src' set to a missing directory: 'dir1'."},
+        }
+        self.assertEqual(save_dir_list('src', 'dir1', 'dir 2', 'dir/3'), expected)
 
-    @patch('os.path.isdir', side_effect=[True, False, False])
-    def test_dir_with_missing_refs(self, isdir_mock):
-        self.assertEqual(
-            save_dir_list('src', 'dir:ref1.gz,ref2.gz'),
-            '{"proc.error": "Output \'src\' set to missing references: \'ref1.gz, ref2.gz\'."}',
-        )
+    @patch('resolwe_runtime_utils.Path')
+    @patch('os.path.isdir', side_effect=[False, False])
+    def test_dir_with_missing_refs(self, isdir_mock, path_mock):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {
+                'error': "Output 'src' set to missing references: 'ref1.gz, ref2.gz'."
+            },
+        }
+        self.assertEqual(save_dir_list('src', 'dir:ref1.gz,ref2.gz'), expected)
 
     def test_files_invalid_format(self):
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Only one colon ':' allowed in dir-refs specification."},
+        }
         self.assertEqual(
-            save_dir_list('src', 'dir1:ref1.bar:ref2.bar', 'dir2'),
-            '{"proc.error": "Only one colon \':\' allowed in dir-refs specification."}',
+            save_dir_list('src', 'dir1:ref1.bar:ref2.bar', 'dir2'), expected
         )
 
 
 class TestInfo(ResolweRuntimeUtilsTestCase):
     def test_string(self):
-        self.assertEqual(info('Some info'), '{"proc.info": "Some info"}')
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'info': 'Some info'},
+        }
+        self.assertEqual(info('Some info'), expected)
 
     def test_improper_input(self):
         self.assertRaises(TypeError, info, 'First', 'Second')
@@ -288,7 +474,12 @@ class TestInfo(ResolweRuntimeUtilsTestCase):
 
 class TestWarning(ResolweRuntimeUtilsTestCase):
     def test_string(self):
-        self.assertEqual(warning('Some warning'), '{"proc.warning": "Some warning"}')
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'warning': 'Some warning'},
+        }
+        self.assertEqual(warning('Some warning'), expected)
 
     def test_improper_input(self):
         self.assertRaises(TypeError, warning, 'First', 'Second')
@@ -296,7 +487,12 @@ class TestWarning(ResolweRuntimeUtilsTestCase):
 
 class TestError(ResolweRuntimeUtilsTestCase):
     def test_string(self):
-        self.assertEqual(error('Some error'), '{"proc.error": "Some error"}')
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': 'Some error'},
+        }
+        self.assertEqual(error('Some error'), expected)
 
     def test_improper_input(self):
         self.assertRaises(TypeError, error, 'First', 'Second')
@@ -304,79 +500,135 @@ class TestError(ResolweRuntimeUtilsTestCase):
 
 class TestProgress(ResolweRuntimeUtilsTestCase):
     def test_number(self):
-        self.assertEqual(progress(0.1), '{"proc.progress": 0.1}')
-        self.assertEqual(progress(0), '{"proc.progress": 0.0}')
-        self.assertEqual(progress(1), '{"proc.progress": 1.0}')
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 0.1}
+        self.assertEqual(progress(0.1), expected)
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 0}
+        self.assertEqual(progress(0), expected)
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 1}
+        self.assertEqual(progress(1), expected)
 
     def test_string(self):
-        self.assertEqual(progress('0.1'), '{"proc.progress": 0.1}')
-        self.assertEqual(progress('0'), '{"proc.progress": 0.0}')
-        self.assertEqual(progress('1'), '{"proc.progress": 1.0}')
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 0.1}
+        self.assertEqual(progress('0.1'), expected)
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 0}
+        self.assertEqual(progress('0'), expected)
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 1}
+        self.assertEqual(progress('1'), expected)
 
     def test_bool(self):
-        self.assertEqual(progress(True), '{"proc.progress": 1.0}')
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 1.0}
+        self.assertEqual(progress(True), expected)
 
     def test_improper_input(self):
-        self.assertEqual(
-            progress(None), '{"proc.warning": "Progress must be a float."}'
-        )
-        self.assertEqual(
-            progress('one'), '{"proc.warning": "Progress must be a float."}'
-        )
-        self.assertEqual(
-            progress('[0.1]'), '{"proc.warning": "Progress must be a float."}'
-        )
-        self.assertEqual(
-            progress(-1),
-            '{"proc.warning": "Progress must be a float between 0 and 1."}',
-        )
-        self.assertEqual(
-            progress(1.1),
-            '{"proc.warning": "Progress must be a float between 0 and 1."}',
-        )
-        self.assertEqual(
-            progress('1.1'),
-            '{"proc.warning": "Progress must be a float between 0 and 1."}',
-        )
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'warning': 'Progress must be a float.'},
+        }
+        self.assertEqual(progress(None), expected)
+        self.assertEqual(progress('one'), expected)
+        self.assertEqual(progress('[0.1]'), expected)
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'warning': 'Progress must be a float between 0 and 1.'},
+        }
+        self.assertEqual(progress(-1), expected)
+        self.assertEqual(progress(1.1), expected)
+        self.assertEqual(progress('1.1'), expected)
 
 
 class TestCheckRC(ResolweRuntimeUtilsTestCase):
     def test_valid_integers(self):
-        self.assertEqual(checkrc(0), '{"proc.rc": 0}')
-        self.assertEqual(checkrc(2, 2, 'Error'), '{"proc.rc": 0}')
-        self.assertJSONEqual(
-            checkrc(1, 2, 'Error'), '{"proc.rc": 1, "proc.error": "Error"}'
-        )
-        self.assertEqual(checkrc(2, 2), '{"proc.rc": 0}')
-        self.assertEqual(checkrc(1, 2), '{"proc.rc": 1}')
+        expected = {'type': 'COMMAND', 'type_data': 'update_rc', 'data': {'rc': 0}}
+        self.assertEqual(checkrc(0), expected)
+        self.assertEqual(checkrc(2, 2, 'Error'), expected)
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_rc',
+            'data': {'rc': 1, 'error': 'Error'},
+        }
+        self.assertEqual(checkrc(1, 2, 'Error'), expected)
+        expected = {'type': 'COMMAND', 'type_data': 'update_rc', 'data': {'rc': 0}}
+        self.assertEqual(checkrc(2, 2), expected)
+        expected = {'type': 'COMMAND', 'type_data': 'update_rc', 'data': {'rc': 1}}
+        self.assertEqual(checkrc(1, 2), expected)
 
     def test_valid_strings(self):
-        self.assertEqual(checkrc('0'), '{"proc.rc": 0}')
-        self.assertEqual(checkrc('2', '2', 'Error'), '{"proc.rc": 0}')
-        self.assertJSONEqual(
-            checkrc('1', '2', 'Error'), '{"proc.rc": 1, "proc.error": "Error"}'
-        )
+        expected = {'type': 'COMMAND', 'type_data': 'update_rc', 'data': {'rc': 0}}
+        self.assertEqual(checkrc('0'), expected)
+        self.assertEqual(checkrc('2', '2', 'Error'), expected)
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_rc',
+            'data': {'rc': 1, 'error': 'Error'},
+        }
+        self.assertEqual(checkrc('1', '2', 'Error'), expected)
 
     def test_error_message_not_string(self):
-        self.assertJSONEqual(
-            checkrc(1, ['Error']), '{"proc.rc": 1, "proc.error": ["Error"]}'
-        )
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'update_rc',
+            'data': {'rc': 1, 'error': ['Error']},
+        }
+        self.assertEqual(checkrc(1, ['Error']), expected)
 
     def test_improper_input(self):
-        self.assertEqual(
-            checkrc(None), '{"proc.error": "Invalid return code: \'None\'."}'
-        )
-        self.assertEqual(
-            checkrc('foo'), '{"proc.error": "Invalid return code: \'foo\'."}'
-        )
-        self.assertEqual(
-            checkrc(1, 'foo', 'Error'),
-            '{"proc.error": "Invalid return code: \'foo\'."}',
-        )
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Invalid return code: 'None'."},
+        }
+        self.assertEqual(checkrc(None), expected)
         self.assertEqual(
             checkrc(1, None, 'Error'),
-            '{"proc.error": "Invalid return code: \'None\'."}',
+            expected,
         )
+        expected = {
+            'type': 'COMMAND',
+            'type_data': 'process_log',
+            'data': {'error': "Invalid return code: 'foo'."},
+        }
+        self.assertEqual(checkrc('foo'), expected)
+        self.assertEqual(
+            checkrc(1, 'foo', 'Error'),
+            expected,
+        )
+
+
+class SendMessageTest(TestCase):
+    def test_send_message(self):
+        def _receive(server_socket, result):
+            response = {'type_data': 'OK'}
+            message_body = json.dumps(response).encode()
+            message_header = "{length:0{size}d}".format(
+                length=len(message_body), size=5
+            ).encode("utf-8")
+            message = message_header + message_body
+            connection = sock.accept()[0]
+            received = b""
+            header_length = int(connection.recv(5))
+            received = connection.recv(header_length)
+            connection.send(message)
+            result.append(received)
+
+        result = []
+        test_message = "Test data"
+        temp_dir = tempfile.mkdtemp()
+        try:
+            socket_path = os.path.join(temp_dir, "socket.s")
+            with patch("resolwe_runtime_utils.COMMUNICATOR_SOCKET", socket_path):
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.bind(socket_path)
+                sock.listen(1)
+                server_thread = Thread(target=_receive, args=(sock, result))
+                server_thread.start()
+                send_message(test_message)
+                server_thread.join()
+        finally:
+            shutil.rmtree(temp_dir)
+
+        self.assertEqual(test_message, json.loads(result[0].decode()))
 
 
 class ImportFileTestCase(TestCase):
@@ -537,108 +789,167 @@ class ImportFileTestCase(TestCase):
 
 
 class TestConsoleCommands(ResolweRuntimeUtilsTestCase):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_annotate(self, stdout_mock):
+    def test_re_annotate(self, stdout_mock, send_mock):
         with patch.object(sys, 'argv', ['_', 'foo.bar', '2']):
             _re_annotate_entity_main()
             self.assertEqual(
-                stdout_mock.getvalue(), '{"_entity.descriptor.foo.bar": 2}\n'
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'annotate', 'data': {'foo.bar': 2}}\n",
             )
 
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('sys.stdout', new_callable=StringIO)
-    def test_error_handling(self, stdout_mock):
+    def test_error_handling(self, stdout_mock, send_mock):
         with patch.object(sys, 'argv', ['re-save', 'test', '123', 'test', '345']):
             _re_save_main()
             self.assertEqual(
                 stdout_mock.getvalue(),
-                '{"proc.error": "Unexpected error in \'re-save\': save() takes 2 positional arguments but 4 were given"}\n',
+                "{\'type\': \'COMMAND\', \'type_data\': \'process_log\', \'data\': {\'error\': \"Unexpected error in \'re-save\': save() takes 2 positional arguments but 4 were given\"}}\n",
             )
 
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_save(self, stdout_mock):
+    def test_re_save(self, stdout_mock, send_mock):
+        send_mock.side_effect = lambda x: print(x)
         with patch.object(sys, 'argv', ['_', 'foo.bar', '2']):
             _re_save_main()
-            self.assertEqual(stdout_mock.getvalue(), '{"foo.bar": 2}\n')
+            self.assertEqual(
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': 2}}\n",
+            )
 
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('os.path.isfile', return_value=True)
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_export(self, stdout_mock, isfile_mock):
+    def test_re_export(self, stdout_mock, isfile_mock, send_mock):
         with patch.object(sys, 'argv', ['_', 'foo.bar']):
             _re_export_main()
-            self.assertEqual(stdout_mock.getvalue(), 'export foo.bar\n')
+            self.assertEqual(
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'export_files', 'data': ['foo.bar']}\n",
+            )
 
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_save_list(self, stdout_mock):
+    def test_re_save_list(self, stdout_mock, send_mock):
         with patch.object(sys, 'argv', ['_', 'foo.bar', '2', 'baz']):
             _re_save_list_main()
-            self.assertEqual(stdout_mock.getvalue(), '{"foo.bar": [2, "baz"]}\n')
+            self.assertEqual(
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': [2, 'baz']}}\n",
+            )
 
-    @patch('os.path.isfile', return_value=True)
+    @patch('resolwe_runtime_utils._get_file_size', return_value=42)
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
+    @patch('resolwe_runtime_utils.Path')
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_save_file(self, stdout_mock, isfile_mock):
+    def test_re_save_file(
+        self, stdout_mock, path_mock, send_mock, copy_mock, size_mock
+    ):
         with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz.py']):
             _re_save_file_main()
             self.assertEqual(
-                stdout_mock.getvalue(), '{"foo.bar": {"file": "baz.py"}}\n'
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': {'file': 'baz.py', 'size': 42}}}\n",
             )
 
-    @patch('os.path.isfile', return_value=True)
+    @patch('resolwe_runtime_utils._get_file_size', return_value=42)
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
+    @patch('resolwe_runtime_utils.Path')
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_save_file_list(self, stdout_mock, isfile_mock):
+    def test_re_save_file_list(
+        self, stdout_mock, path_mock, send_mock, copy_mock, size_mock
+    ):
+        path_mock.is_file.return_value = True
         with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz.py', 'baz 2.py']):
             _re_save_file_list_main()
             self.assertEqual(
                 stdout_mock.getvalue(),
-                '{"foo.bar": [{"file": "baz.py"}, {"file": "baz 2.py"}]}\n',
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': [{'file': 'baz.py', 'size': 42}, {'file': 'baz 2.py', 'size': 42}]}}\n",
             )
 
+    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
+    @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_save_dir(self, stdout_mock, isdir_mock):
+    def test_re_save_dir(
+        self, stdout_mock, isdir_mock, path_mock, send_mock, copy_mock, size_mock
+    ):
         with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz']):
             _re_save_dir_main()
-            self.assertEqual(stdout_mock.getvalue(), '{"foo.bar": {"dir": "baz"}}\n')
+            self.assertEqual(
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': {'dir': 'baz', 'size': 42}}}\n",
+            )
 
+    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
+    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
+    @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_save_dir_list(self, stdout_mock, isfile_mock):
+    def test_re_save_dir_list(
+        self, stdout_mock, isfile_mock, path_mock, send_mock, copy_mock, size_mock
+    ):
         with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz', 'baz 2']):
             _re_save_dir_list_main()
             self.assertEqual(
                 stdout_mock.getvalue(),
-                '{"foo.bar": [{"dir": "baz"}, {"dir": "baz 2"}]}\n',
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': [{'dir': 'baz', 'size': 42}, {'dir': 'baz 2', 'size': 42}]}}\n",
             )
 
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_info(self, stdout_mock):
+    def test_re_info(self, stdout_mock, send_mock):
         with patch.object(sys, 'argv', ['_', 'some info']):
             _re_info_main()
-            self.assertEqual(stdout_mock.getvalue(), '{"proc.info": "some info"}\n')
+            self.assertEqual(
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'process_log', 'data': {'info': 'some info'}}\n",
+            )
 
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_warning(self, stdout_mock):
+    def test_re_warning(self, stdout_mock, send_mock):
         with patch.object(sys, 'argv', ['_', 'some warning']):
             _re_warning_main()
             self.assertEqual(
-                stdout_mock.getvalue(), '{"proc.warning": "some warning"}\n'
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'process_log', 'data': {'warning': 'some warning'}}\n",
             )
 
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_error(self, stdout_mock):
+    def test_re_error(self, stdout_mock, send_mock):
         with patch.object(sys, 'argv', ['_', 'some error']):
             _re_error_main()
-            self.assertEqual(stdout_mock.getvalue(), '{"proc.error": "some error"}\n')
+            self.assertEqual(
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'process_log', 'data': {'error': 'some error'}}\n",
+            )
 
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_progress(self, stdout_mock):
+    def test_re_progress(self, stdout_mock, send_mock):
         with patch.object(sys, 'argv', ['_', '0.7']):
             _re_progress_main()
-            self.assertEqual(stdout_mock.getvalue(), '{"proc.progress": 0.7}\n')
+            self.assertEqual(
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'progress', 'data': 0.7}\n",
+            )
 
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_checkrc(self, stdout_mock):
+    def test_re_checkrc(self, stdout_mock, send_mock):
         with patch.object(sys, 'argv', ['_', '1', '2', 'error']):
             _re_checkrc_main()
-            self.assertJSONEqual(
-                stdout_mock.getvalue(), '{"proc.rc": 1, "proc.error": "error"}\n'
+            self.assertEqual(
+                stdout_mock.getvalue(),
+                "{'type': 'COMMAND', 'type_data': 'update_rc', 'data': {'rc': 1, 'error': 'error'}}\n",
             )

@@ -14,6 +14,7 @@ Unreleased
 Added
 -----
 - Add re-run command
+- Send commands over socket instead of printing JSON to stdout
 
 ==================
 2.1.0 - 2020-02-11
