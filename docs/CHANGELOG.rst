@@ -7,9 +7,9 @@ file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
-==========
-Unreleased
-==========
+==================
+3.0.0 - 2020-12-09
+==================
 
 Added
 -----
