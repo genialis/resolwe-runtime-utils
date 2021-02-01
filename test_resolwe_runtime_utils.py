@@ -101,12 +101,12 @@ class TestSave(ResolweRuntimeUtilsTestCase):
         expected["data"] = {'number': "0"}
         self.assertEqual(save('number', '"0"'), expected)
 
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
-    def test_hash(self, copy_mock):
+    @patch('resolwe_runtime_utils.collect_entry', return_value=(1, 1))
+    def test_hash(self, collect_mock):
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
-            'data': {'etc': {'file': 'foo.py'}},
+            'data': {'etc': {'file': 'foo.py', "size": 1, "total_size": 2}},
         }
         self.assertEqual(save('etc', '{"file": "foo.py"}'), expected)
 
@@ -172,31 +172,34 @@ class TestSaveList(ResolweRuntimeUtilsTestCase):
 
 
 class TestSaveFile(ResolweRuntimeUtilsTestCase):
-    @patch('resolwe_runtime_utils._get_file_size', return_value=42)
     @patch('resolwe_runtime_utils.Path')
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', return_value=(42, 0))
     @patch('os.path.isfile', return_value=True)
-    def test_file(self, isfile_mock, copy_mock, path_mock, size_mock):
+    def test_file(self, isfile_mock, collect_mock, path_mock):
         path_mock.is_file.return_value = True
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
-            'data': {'etc': {'file': 'foo.py', 'size': 42}},
+            'data': {'etc': {'file': 'foo.py', 'size': 42, 'total_size': 42}},
         }
         self.assertEqual(save_file('etc', 'foo.py'), expected)
         expected["data"]["etc"]["file"] = "foo bar.py"
         self.assertEqual(save_file('etc', 'foo bar.py'), expected)
 
-    @patch('resolwe_runtime_utils._get_file_size', return_value=42)
     @patch('resolwe_runtime_utils.Path')
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', return_value=(42, 0))
     @patch('os.path.isfile', return_value=True)
-    def test_file_with_refs(self, isfile_mock, copy_mock, path_mock, size_mock):
+    def test_file_with_refs(self, isfile_mock, collect_mock, path_mock):
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
             'data': {
-                'etc': {'file': 'foo.py', 'size': 42, 'refs': ('ref1.txt', 'ref2.txt')}
+                'etc': {
+                    'file': 'foo.py',
+                    'size': 42,
+                    'total_size': 42,
+                    'refs': ('ref1.txt', 'ref2.txt'),
+                }
             },
         }
         self.assertEqual(
@@ -239,19 +242,18 @@ class TestSaveFile(ResolweRuntimeUtilsTestCase):
 
 
 class TestSaveFileList(ResolweRuntimeUtilsTestCase):
-    @patch('resolwe_runtime_utils._get_file_size', side_effect=[1, 2, 3])
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', side_effect=[(1, 0), (2, 0), (3, 0)])
     @patch('resolwe_runtime_utils.Path')
-    def test_files(self, path_mock, copy_mock, size_mock):
+    def test_files(self, path_mock, collect_mock):
         path_mock.is_file.return_value = True
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
             'data': {
                 'src': [
-                    {'file': 'foo.py', 'size': 1},
-                    {'file': 'bar 2.py', 'size': 2},
-                    {'file': 'baz/3.py', 'size': 3},
+                    {'file': 'foo.py', 'size': 1, 'total_size': 1},
+                    {'file': 'bar 2.py', 'size': 2, 'total_size': 2},
+                    {'file': 'baz/3.py', 'size': 3, 'total_size': 3},
                 ]
             },
         }
@@ -259,19 +261,23 @@ class TestSaveFileList(ResolweRuntimeUtilsTestCase):
             save_file_list('src', 'foo.py', 'bar 2.py', 'baz/3.py'), expected
         )
 
-    @patch('resolwe_runtime_utils._get_file_size', side_effect=[1, 2])
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', side_effect=[(1, 1), (2, 0)])
     @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isfile', return_value=True)
-    def test_file_with_refs(self, isfile_mock, path_mock, copy_mock, size_mock):
+    def test_file_with_refs(self, isfile_mock, path_mock, collect_mock):
         path_mock.is_file.return_value = True
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
             'data': {
                 'src': [
-                    {'file': 'foo.py', 'size': 1, 'refs': ['ref1.gz', 'ref2.gz']},
-                    {'file': 'bar.py', 'size': 2},
+                    {
+                        'file': 'foo.py',
+                        'size': 1,
+                        'total_size': 2,
+                        'refs': ['ref1.gz', 'ref2.gz'],
+                    },
+                    {'file': 'bar.py', 'size': 2, 'total_size': 2},
                 ]
             },
         }
@@ -299,11 +305,10 @@ class TestSaveFileList(ResolweRuntimeUtilsTestCase):
             save_file_list('src', 'foo.py:ref1.gz,ref2.gz', 'bar.py'), expected
         )
 
-    @patch('resolwe_runtime_utils._get_file_size', side_effect=[1, 2])
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', side_effect=[(0, 0)])
     @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isfile', side_effect=[False, False])
-    def test_file_with_missing_refs(self, isfile_mock, path_mock, copy_mock, size_mock):
+    def test_file_with_missing_refs(self, isfile_mock, path_mock, collect_mock):
         path_mock.is_file.return_value = True
         expected = {
             'type': 'COMMAND',
@@ -327,33 +332,36 @@ class TestSaveFileList(ResolweRuntimeUtilsTestCase):
 
 
 class TestSaveDir(ResolweRuntimeUtilsTestCase):
-    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', side_effect=[(42, 0), (42, 0)])
     @patch('resolwe_runtime_utils.Path')
-    def test_dir(self, path_mock, copy_mock, dir_size_mock):
+    def test_dir(self, path_mock, collect_mock):
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
-            'data': {'etc': {'dir': 'foo', 'size': 42}},
+            'data': {'etc': {'dir': 'foo', 'size': 42, 'total_size': 42}},
         }
         self.assertEqual(save_dir('etc', 'foo'), expected)
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
-            'data': {'etc': {'dir': 'foo bar', 'size': 42}},
+            'data': {'etc': {'dir': 'foo bar', 'size': 42, 'total_size': 42}},
         }
         self.assertEqual(save_dir('etc', 'foo bar'), expected)
 
-    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', return_value=(42, 0))
     @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
-    def test_dir_with_refs(self, isdir_mock, path_mock, copy_mock, dir_size_mock):
+    def test_dir_with_refs(self, isdir_mock, path_mock, collect_mock):
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
             'data': {
-                'etc': {'dir': 'foo', 'size': 42, 'refs': ('ref1.txt', 'ref2.txt')}
+                'etc': {
+                    'dir': 'foo',
+                    'size': 42,
+                    'total_size': 42,
+                    'refs': ('ref1.txt', 'ref2.txt'),
+                }
             },
         }
         self.assertEqual(save_dir('etc', 'foo', 'ref1.txt', 'ref2.txt'), expected)
@@ -372,13 +380,10 @@ class TestSaveDir(ResolweRuntimeUtilsTestCase):
         }
         self.assertEqual(save_dir('etc', 'foo bar'), expected)
 
-    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', return_value=(42, 0))
     @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', side_effect=[False, False])
-    def test_dir_with_missing_refs(
-        self, isdir_mock, path_mock, copy_mock, dir_size_mock
-    ):
+    def test_dir_with_missing_refs(self, isdir_mock, path_mock, collect_mock):
         expected = {
             'type': 'COMMAND',
             'type_data': 'process_log',
@@ -393,36 +398,39 @@ class TestSaveDir(ResolweRuntimeUtilsTestCase):
 
 
 class TestSaveDirList(ResolweRuntimeUtilsTestCase):
-    @patch('resolwe_runtime_utils._get_dir_size', side_effect=[1, 2, 3])
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', side_effect=[(1, 0), (2, 0), (3, 0)])
     @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
-    def test_dirs(self, isdir_mock, path_mock, copy_mock, dir_size_mock):
+    def test_dirs(self, isdir_mock, path_mock, collect_mock):
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
             'data': {
                 'src': [
-                    {'dir': 'dir1', 'size': 1},
-                    {'dir': 'dir 2', 'size': 2},
-                    {'dir': 'dir/3', 'size': 3},
+                    {'dir': 'dir1', 'size': 1, 'total_size': 1},
+                    {'dir': 'dir 2', 'size': 2, 'total_size': 2},
+                    {'dir': 'dir/3', 'size': 3, 'total_size': 3},
                 ]
             },
         }
         self.assertEqual(save_dir_list('src', 'dir1', 'dir 2', 'dir/3'), expected)
 
-    @patch('resolwe_runtime_utils._get_dir_size', side_effect=[1, 2])
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', side_effect=[(1, 0), (2, 0)])
     @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
-    def test_dir_with_refs(self, isdir_mock, path_mock, copy_mock, dir_size_mock):
+    def test_dir_with_refs(self, isdir_mock, path_mock, collect_mock):
         expected = {
             'type': 'COMMAND',
             'type_data': 'update_output',
             'data': {
                 'src': [
-                    {'dir': 'dir1', 'size': 1, 'refs': ['ref1.gz', 'ref2.gz']},
-                    {'dir': 'dir2', 'size': 2},
+                    {
+                        'dir': 'dir1',
+                        'size': 1,
+                        'total_size': 1,
+                        'refs': ['ref1.gz', 'ref2.gz'],
+                    },
+                    {'dir': 'dir2', 'size': 2, 'total_size': 2},
                 ]
             },
         }
@@ -500,23 +508,23 @@ class TestError(ResolweRuntimeUtilsTestCase):
 
 class TestProgress(ResolweRuntimeUtilsTestCase):
     def test_number(self):
-        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 0.1}
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 10}
         self.assertEqual(progress(0.1), expected)
         expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 0}
         self.assertEqual(progress(0), expected)
-        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 1}
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 100}
         self.assertEqual(progress(1), expected)
 
     def test_string(self):
-        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 0.1}
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 10}
         self.assertEqual(progress('0.1'), expected)
         expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 0}
         self.assertEqual(progress('0'), expected)
-        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 1}
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 100}
         self.assertEqual(progress('1'), expected)
 
     def test_bool(self):
-        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 1.0}
+        expected = {'type': 'COMMAND', 'type_data': 'progress', 'data': 100}
         self.assertEqual(progress(True), expected)
 
     def test_improper_input(self):
@@ -599,15 +607,16 @@ class TestCheckRC(ResolweRuntimeUtilsTestCase):
 class SendMessageTest(TestCase):
     def test_send_message(self):
         def _receive(server_socket, result):
+            header_size = 8
             response = {'type_data': 'OK'}
             message_body = json.dumps(response).encode()
-            message_header = "{length:0{size}d}".format(
-                length=len(message_body), size=5
-            ).encode("utf-8")
+            message_header = len(message_body).to_bytes(header_size, byteorder="big")
             message = message_header + message_body
             connection = sock.accept()[0]
             received = b""
-            header_length = int(connection.recv(5))
+            header_length = int.from_bytes(
+                connection.recv(header_size), byteorder="big"
+            )
             received = connection.recv(header_length)
             connection.send(message)
             result.append(received)
@@ -841,67 +850,59 @@ class TestConsoleCommands(ResolweRuntimeUtilsTestCase):
                 "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': [2, 'baz']}}\n",
             )
 
-    @patch('resolwe_runtime_utils._get_file_size', return_value=42)
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', return_value=(42, 0))
     @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('resolwe_runtime_utils.Path')
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_save_file(
-        self, stdout_mock, path_mock, send_mock, copy_mock, size_mock
-    ):
+    def test_re_save_file(self, stdout_mock, path_mock, send_mock, collect_mock):
         with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz.py']):
             _re_save_file_main()
             self.assertEqual(
                 stdout_mock.getvalue(),
-                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': {'file': 'baz.py', 'size': 42}}}\n",
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': {'file': 'baz.py', 'size': 42, 'total_size': 42}}}\n",
             )
 
-    @patch('resolwe_runtime_utils._get_file_size', return_value=42)
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', return_value=(42, 0))
     @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('resolwe_runtime_utils.Path')
     @patch('sys.stdout', new_callable=StringIO)
-    def test_re_save_file_list(
-        self, stdout_mock, path_mock, send_mock, copy_mock, size_mock
-    ):
+    def test_re_save_file_list(self, stdout_mock, path_mock, send_mock, collect_mock):
         path_mock.is_file.return_value = True
         with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz.py', 'baz 2.py']):
             _re_save_file_list_main()
             self.assertEqual(
                 stdout_mock.getvalue(),
-                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': [{'file': 'baz.py', 'size': 42}, {'file': 'baz 2.py', 'size': 42}]}}\n",
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': [{'file': 'baz.py', 'size': 42, 'total_size': 42}, {'file': 'baz 2.py', 'size': 42, 'total_size': 42}]}}\n",
             )
 
-    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', return_value=(42, 0))
     @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
     @patch('sys.stdout', new_callable=StringIO)
     def test_re_save_dir(
-        self, stdout_mock, isdir_mock, path_mock, send_mock, copy_mock, size_mock
+        self, stdout_mock, isdir_mock, path_mock, send_mock, collect_mock
     ):
         with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz']):
             _re_save_dir_main()
             self.assertEqual(
                 stdout_mock.getvalue(),
-                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': {'dir': 'baz', 'size': 42}}}\n",
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': {'dir': 'baz', 'size': 42, 'total_size': 42}}}\n",
             )
 
-    @patch('resolwe_runtime_utils._get_dir_size', return_value=42)
-    @patch('resolwe_runtime_utils._copy_file_or_dir')
+    @patch('resolwe_runtime_utils.collect_entry', return_value=(42, 0))
     @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
     @patch('resolwe_runtime_utils.Path')
     @patch('os.path.isdir', return_value=True)
     @patch('sys.stdout', new_callable=StringIO)
     def test_re_save_dir_list(
-        self, stdout_mock, isfile_mock, path_mock, send_mock, copy_mock, size_mock
+        self, stdout_mock, isfile_mock, path_mock, send_mock, collect_mock
     ):
         with patch.object(sys, 'argv', ['_', 'foo.bar', 'baz', 'baz 2']):
             _re_save_dir_list_main()
             self.assertEqual(
                 stdout_mock.getvalue(),
-                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': [{'dir': 'baz', 'size': 42}, {'dir': 'baz 2', 'size': 42}]}}\n",
+                "{'type': 'COMMAND', 'type_data': 'update_output', 'data': {'foo.bar': [{'dir': 'baz', 'size': 42, 'total_size': 42}, {'dir': 'baz 2', 'size': 42, 'total_size': 42}]}}\n",
             )
 
     @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))
@@ -941,7 +942,7 @@ class TestConsoleCommands(ResolweRuntimeUtilsTestCase):
             _re_progress_main()
             self.assertEqual(
                 stdout_mock.getvalue(),
-                "{'type': 'COMMAND', 'type_data': 'progress', 'data': 0.7}\n",
+                "{'type': 'COMMAND', 'type_data': 'progress', 'data': 70}\n",
             )
 
     @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: print(x))

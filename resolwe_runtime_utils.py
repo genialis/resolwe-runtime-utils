@@ -29,8 +29,8 @@ import subprocess
 import tarfile
 import zlib
 import time
-from contextlib import suppress
-from itertools import chain
+from enum import Enum
+from itertools import zip_longest
 from pathlib import Path
 
 
@@ -43,12 +43,18 @@ SOCKETS_PATH = Path(os.environ.get("SOCKETS_VOLUME", "/sockets"))
 COMMUNICATOR_SOCKET = SOCKETS_PATH / os.environ.get("SCRIPT_SOCKET", "_socket2.s")
 DATA_VOLUME = Path(os.environ.get("DATA_VOLUME", "/data"))
 
+# Upload files in batches of 1000.
+UPLOAD_FILE_BATCH_SIZE = 1000
+
 logger = logging.getLogger(__name__)
 
 
 # Compat between Python 2.7/3.4 and Python 3.5
 if not hasattr(json, 'JSONDecodeError'):
     json.JSONDecodeError = ValueError
+
+
+OutputType = Enum("OutputType", "Value FileDir Storage")
 
 
 def _retry(
@@ -107,7 +113,7 @@ def _read_bytes(socket, message_size):
     return message
 
 
-def _receive_data(socket, header_size=5):
+def _receive_data(socket, header_size=8):
     """Recieve data over the given socket.
 
     :param socket: the socket to read from.
@@ -117,8 +123,7 @@ def _receive_data(socket, header_size=5):
     message = _read_bytes(socket, header_size)
     if not message:
         return None
-    message_size = int(message)
-
+    message_size = int.from_bytes(message, byteorder="big")
     message = _read_bytes(socket, message_size)
     assert len(message) == message_size
     data = json.loads(message.decode("utf-8"))
@@ -144,7 +149,7 @@ def command(name, data):
     return {"type": "COMMAND", "type_data": name, "data": data}
 
 
-def send_message(data, header_size=5):
+def send_message(data, header_size=8):
     """Send data over socket."""
 
     @_retry()
@@ -170,71 +175,138 @@ def send_message(data, header_size=5):
 
     try:
         sock = _connect(str(COMMUNICATOR_SOCKET))
-        message = json.dumps(data).encode("utf-8")
-        message_length = "{length:0{size}d}".format(
-            length=len(message), size=header_size
-        ).encode("utf-8")
-        bytes_to_send = message_length + message
-        sock.sendall(bytes_to_send)
+        message = json.dumps(data).encode()
+        message_length = len(message).to_bytes(header_size, byteorder="big")
+        sock.sendall(message_length)
+        sock.sendall(message)
         response = _receive_data(sock)
         if not _check_response(response):
             logger.error("Error in respone to %s: %s.", data, response)
             raise RuntimeError("Wrong response received, terminating processing.")
 
     finally:
-        with suppress(Exception):
-            sock.close()
+        sock.close()
 
 
-def _copy_file_or_dir(entries):
-    """Copy file and all its references to data_volume.
+def collect_entry(entry, references):
+    """Get the size of the entry and its references and upload them.
 
-    The entry is a path relative to the DATA_LOCAL_VOLUME (our working
-    directory). It must be copied to the DATA_VOLUME on the shared
-    filesystem.
+    The entry and its references are uploaded to the chosen storage connector.
+
+    NOTE: This process may take considerable amount of time.
+
+    :args entry: file or directory that is being collected.
+    :args references: references belonging to the entry.
     """
-    for entry in entries:
-        source = Path(entry)
-        destination = DATA_VOLUME / source
-        if not destination.parent.is_dir():
-            destination.parent.mkdir(parents=True)
 
-        if source.is_dir():
-            if not destination.exists():
-                shutil.copytree(str(source), str(destination))
+    def grouper(iterable, n, fillvalue=None):
+        """Collect data into fixed-length chunks or blocks.
+
+        See https://docs.python.org/3/library/itertools.html#itertools-recipes.
+        """
+        args = [iter(iterable)] * n
+        return zip_longest(*args, fillvalue=fillvalue)
+
+    def get_entries_size(entries, processed_files, processed_dirs):
+        """Get the total size of the entries.
+
+        Traverse all the files and add their sizes. Skip already processed
+        fles: is a common case that the file itself is also referenced under
+        references for instance.
+
+        :raises RuntimeError: when one of the entris is neither file nor
+            directory.
+        """
+        total_size = 0
+        for entry in entries:
+            if entry in processed_files:
+                continue
+            elif entry.is_dir():
+                processed_dirs.add(entry)
+                total_size += get_entries_size(
+                    entry.glob("*"), processed_files, processed_dirs
+                )
+            elif entry.is_file():
+                processed_files.add(entry)
+                total_size += entry.stat().st_size
             else:
-                # If destination directory exists the copytree will fail.
-                # In such case perform a recursive call with entries in
-                # the source directory as arguments.
-                #
-                # TODO: fix when we support Python 3.8 and later. See
-                # dirs_exist_ok argument to copytree method.
-                _copy_file_or_dir(source.glob("*"))
-        elif source.is_file():
-            if not destination.parent.is_dir():
-                destination.parent.mkdir(parents=True)
-            # Use copy2 to preserve file metadata, such as file creation
-            # and modification times.
-            shutil.copy2(str(source), str(destination))
+                raise RuntimeError(
+                    "While collecting entries: {} must be either file of directory.".format(
+                        entry
+                    )
+                )
+        return total_size
+
+    processed_dirs = set()
+    processed_files = set()
+    entry_path = Path(entry)
+    entry_size = get_entries_size([entry_path], processed_files, processed_dirs)
+    references_size = get_entries_size(
+        (Path(reference) for reference in references), processed_files, processed_dirs
+    )
+    # Upload files in chunks. If possible avoid creation of a giant
+    # list when number of referenced files is huge: its size could be
+    # over half a milion in special cases.
+    for group in grouper(processed_files, UPLOAD_FILE_BATCH_SIZE):
+        send_message(
+            command(
+                "upload_files",
+                [str(entry) for entry in group if entry is not None],
+            )
+        )
+    for group in grouper(processed_dirs, UPLOAD_FILE_BATCH_SIZE):
+        send_message(
+            command(
+                "upload_dirs",
+                [str(entry) for entry in group if entry is not None],
+            )
+        )
+    return (entry_size, references_size)
 
 
-def _copy_if_exists(data):
-    """Check if data output represents file.
+def _determine_value_type(value):
+    """Determine the type of the output value.
 
-    And copy the file to the shared filesystem if this is the case.
+    This is mostly playing hide and seek with the old code. Sometimes the
+    files and directories are stored via save_file/dir methods and sometimes
+    the plain save is used with value being JSON dict representing file/dir.
+
+    In addition the name of the file could be stored in a value as a string.
+    In such case the expected behaviour is to read the content of referenced
+    file and send it instead.
     """
-    if isinstance(data, dict):
-        if "file" in data:
-            _copy_file_or_dir(chain(data.get("refs", []), (data["file"],)))
-        if "dir" in data:
-            _copy_file_or_dir(chain(data.get("refs", []), (data["dir"],)))
+    determined_type = OutputType.Value
+    if isinstance(value, dict) and any(entry in value for entry in ("file", "dir")):
+        determined_type = OutputType.FileDir
+    elif isinstance(value, str) and Path(value).is_file():
+        determined_type = OutputType.Storage
+    return determined_type
+
+
+def _preprocess_data(data):
+    """Preprocess data accordind to its guessed type.
+
+    In case of file/dir add their size/total_size to the dictionary.
+    In case of storage send the file content instead of filename.
+    """
+    value_type = _determine_value_type(data)
+    if value_type == OutputType.FileDir:
+        filedir_key = "file" if "file" in data else "dir"
+        entry_size, refs_size = collect_entry(data[filedir_key], data.get("refs", []))
+        data["size"] = entry_size
+        data["total_size"] = entry_size + refs_size
+
     # When saving 'storage' the second argument is a path to the JSON file.
     # Copy the file to the shared filespace and hope there are not a lot of
     # false hits.
-    if isinstance(data, str):
-        possible_file = Path(data)
-        if possible_file.is_file():
-            _copy_file_or_dir([possible_file])
+    elif value_type == OutputType.Storage:
+        try:
+            file_content = Path(data).read_text()
+            data = json.loads(file_content)
+        except json.JSONDecodeError:
+            raise RuntimeError(
+                "Value must be a valid JSON, current: {}".format(file_content)
+            )
     return data
 
 
@@ -249,19 +321,11 @@ def _get_dir_size(path):
     )
 
 
-def _get_file_size(path):
-    """Get file size.
-
-    :param path: a Path object pointing to the file.
-    :type path: pathlib.Path
-    """
-    return path.stat().st_size
-
-
 def save_list(key, *values):
     """Construct save_list command."""
     return command(
-        "update_output", {key: [_copy_if_exists(_get_json(value)) for value in values]}
+        "update_output",
+        {key: [_preprocess_data(_get_json(value)) for value in values]},
     )
 
 
@@ -272,21 +336,26 @@ def annotate_entity(key, value):
 
 def save(key, value):
     """Construct save command."""
-    return command("update_output", {key: _copy_if_exists(_get_json(value))})
+    return command("update_output", {key: _preprocess_data(_get_json(value))})
 
 
 def save_file(key, file_path, *refs):
     """Construct save file command.
 
     Data is of the form:
-    { key: {"file": file_path, "size": file_size}}, or
-    { key: {"file": file_path, "size": file_size, "refs": [refs[0], refs[1], ... ]}}
+    { key: {"file": file_path, "size": file_size, "total_size": total_size }}
+
+    with added references
+
+    "refs": [refs[0], refs[1], ... ]
+
+    when applicable.
     """
     path = Path(file_path)
     if not path.is_file():
         return error("Output '{}' set to a missing file: '{}'.".format(key, file_path))
 
-    data = {"file": file_path, "size": _get_file_size(path)}
+    data = {"file": file_path}
 
     if refs:
         missing_refs = [
@@ -299,7 +368,9 @@ def save_file(key, file_path, *refs):
                 )
             )
         data['refs'] = refs
-    _copy_file_or_dir(chain(data.get("refs", []), (data["file"],)))
+    entry_size, refs_size = collect_entry(data["file"], data.get("refs", []))
+    data["size"] = entry_size
+    data["total_size"] = entry_size + refs_size
     return command("update_output", {key: data})
 
 
@@ -329,7 +400,7 @@ def save_file_list(key, *files_refs):
             return error(
                 "Output '{}' set to a missing file: '{}'.".format(key, file_name)
             )
-        file_obj = {'file': file_name, "size": _get_file_size(path)}
+        file_obj = {'file': file_name}
 
         if refs:
             refs = [ref_path.strip() for ref_path in refs.split(',')]
@@ -347,7 +418,9 @@ def save_file_list(key, *files_refs):
         file_list.append(file_obj)
 
     for data in file_list:
-        _copy_file_or_dir(chain(data.get("refs", []), (data["file"],)))
+        entry_size, refs_size = collect_entry(data["file"], data.get("refs", []))
+        data["size"] = entry_size
+        data["total_size"] = entry_size + refs_size
     return command("update_output", {key: file_list})
 
 
@@ -379,7 +452,11 @@ def save_dir(key, dir_path, *refs):
             )
         result[key]["refs"] = refs
 
-    _copy_file_or_dir(chain(result[key].get("refs", []), (result[key]["dir"],)))
+    entry_size, refs_size = collect_entry(
+        result[key]["dir"], result[key].get("refs", [])
+    )
+    result[key]["size"] = entry_size
+    result[key]["total_size"] = entry_size + refs_size
     return command("update_output", result)
 
 
@@ -427,9 +504,10 @@ def save_dir_list(key, *dirs_refs):
 
         dir_list.append(dir_obj)
 
-    for entry in dir_list:
-        _copy_file_or_dir(chain(entry.get("refs", []), (entry["dir"],)))
-
+    for data in dir_list:
+        entry_size, refs_size = collect_entry(data["dir"], data.get("refs", []))
+        data["size"] = entry_size
+        data["total_size"] = entry_size + refs_size
     return command("update_output", {key: dir_list})
 
 
@@ -456,7 +534,8 @@ def error(value):
 def progress(progress):
     """Construct progress command.
 
-    Progress is reported as float between 0 and 1.
+    Progress is reported as float between 0 and 1 and sent to listener as int
+    between 0 and 100.
     """
     if isinstance(progress, int) or isinstance(progress, float):
         progress = float(progress)
@@ -469,7 +548,7 @@ def progress(progress):
     if not 0 <= progress <= 1:
         return warning("Progress must be a float between 0 and 1.")
 
-    return command("progress", progress)
+    return command("progress", round(progress * 100))
 
 
 def checkrc(rc, *args):
@@ -770,6 +849,7 @@ def _re_generic_main(fn):
     try:
         data = fn(*sys.argv[1:])
     except Exception as exc:
+        logger.exception("Exception in resolwe-runtime-utils.")
         data = error("Unexpected error in '{}': {}".format(sys.argv[0], exc))
     # Send data to the communication container.
     send_message(data)
