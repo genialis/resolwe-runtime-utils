@@ -8,6 +8,16 @@ This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
 ==================
+3.1.0 - 2021-02-09
+==================
+
+Added
+-----
+- Signal processing container to upload referenced files
+- Send JSON fields over socket instead of using files
+
+
+==================
 3.0.0 - 2020-12-09
 ==================
 
