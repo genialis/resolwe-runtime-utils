@@ -68,6 +68,7 @@ setuptools.setup(
             'readme',
             'pytest-cov',
             'responses',
+            'setuptools>=56.0.0',
             'setuptools_scm',
         ],
     },
