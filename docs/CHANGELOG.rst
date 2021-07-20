@@ -15,6 +15,10 @@ Added
 -----
 - Add support for Python 3.9
 
+Changed
+-------
+- Migrate from Travis to Github Actions
+
 
 ==================
 3.1.0 - 2021-02-09
