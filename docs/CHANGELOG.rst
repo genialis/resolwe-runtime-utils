@@ -11,6 +11,10 @@ This project adheres to `Semantic Versioning <http://semver.org/>`_.
 Unreleased
 ==========
 
+Changed
+-------
+- Fix ``requests`` version due to compatibility with Python 3.4
+
 Added
 -----
 - Add support for Python 3.9
