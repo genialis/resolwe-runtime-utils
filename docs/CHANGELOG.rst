@@ -7,6 +7,15 @@ file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
+==========
+Unreleased
+==========
+
+Added
+-----
+- Add support for resolving urls
+
+
 ==================
 3.1.1 - 2021-07-21
 ==================

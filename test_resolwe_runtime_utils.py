@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# pylint: disable=missing-docstring
-from io import StringIO
 import json
 import os
 import shutil
@@ -21,46 +19,48 @@ import socket
 import sys
 import tempfile
 import time
+
+# pylint: disable=missing-docstring
+from io import StringIO
 from pathlib import Path
 from threading import Thread
 from unittest import TestCase
 from unittest.mock import patch
 
-import responses
 import requests
+import responses
 
 from resolwe_runtime_utils import (
+    ImportedFormat,
+    _re_annotate_entity_main,
+    _re_checkrc_main,
+    _re_error_main,
+    _re_export_main,
+    _re_info_main,
+    _re_progress_main,
+    _re_save_dir_list_main,
+    _re_save_dir_main,
+    _re_save_file_list_main,
+    _re_save_file_main,
+    _re_save_list_main,
+    _re_save_main,
+    _re_warning_main,
     annotate_entity,
-    send_message,
-    save,
+    checkrc,
+    error,
     export_file,
     import_file,
-    ImportedFormat,
-    save_list,
-    save_file,
-    save_file_list,
+    info,
+    progress,
+    save,
     save_dir,
     save_dir_list,
-    info,
+    save_file,
+    save_file_list,
+    save_list,
+    send_message,
     warning,
-    error,
-    progress,
-    checkrc,
-    _re_annotate_entity_main,
-    _re_save_main,
-    _re_export_main,
-    _re_save_list_main,
-    _re_save_file_main,
-    _re_save_file_list_main,
-    _re_save_dir_main,
-    _re_save_dir_list_main,
-    _re_info_main,
-    _re_warning_main,
-    _re_error_main,
-    _re_progress_main,
-    _re_checkrc_main,
 )
-
 
 TEST_ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -683,15 +683,18 @@ class ImportFileTestCase(TestCase):
         assert not os.path.exists(returned_name), "file should not exist"
         os.remove(returned_name + '.gz')
 
-    def test_uncompressed(self):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: x)
+    def test_uncompressed(self, send_mock):
         self.assertImportFile(
             'some file.1.txt', 'test uncompressed.txt', 'test uncompressed.txt'
         )
 
-    def test_gz(self):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: x)
+    def test_gz(self, send_mock):
         self.assertImportFile('some file.1.txt.gz', 'test gz.txt.gz', 'test gz.txt')
 
-    def test_7z(self):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: x)
+    def test_7z(self, send_mock):
         self.assertImportFile('some file.1.txt.zip', 'test 7z.txt.zip', 'test 7z.txt')
 
         file_name = import_file(self._file('some folder.tar.gz'), 'some folder.tar.gz')
@@ -726,11 +729,13 @@ class ImportFileTestCase(TestCase):
         assert not os.path.isdir('some folder 1'), "directory should not exist"
         assert os.path.exists('some folder 1.tar.gz'), "file not found"
 
-    def test_7z_corrupted(self):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: x)
+    def test_7z_corrupted(self, send_mock):
         with self.assertRaises(ValueError, msg='failed to extract file: corrupted.zip'):
             import_file(self._file('corrupted.zip'), 'corrupted.zip')
 
-    def test_gz_corrupted(self):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: x)
+    def test_gz_corrupted(self, send_mock):
         with self.assertRaises(
             ValueError, msg='invalid gzip file format: corrupted.gz'
         ):
@@ -744,7 +749,8 @@ class ImportFileTestCase(TestCase):
             )
 
     @responses.activate
-    def test_uncompressed_url(self):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: x)
+    def test_uncompressed_url(self, send_mock):
         responses.add(
             responses.GET, 'https://testurl/someslug', status=200, body='some text'
         )
@@ -754,7 +760,8 @@ class ImportFileTestCase(TestCase):
         assert os.path.exists('test uncompressed.txt.gz'), "file not found"
 
     @responses.activate
-    def test_gz_url(self):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: x)
+    def test_gz_url(self, send_mock):
         # Return gzipped file
         responses.add(
             responses.GET,
@@ -771,7 +778,8 @@ class ImportFileTestCase(TestCase):
         assert os.path.exists('test uncompressed.txt.gz'), "file not found"
 
     @responses.activate
-    def test_7z_url(self):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: x)
+    def test_7z_url(self, send_mock):
         # Return zipped file
         responses.add(
             responses.GET,
@@ -792,7 +800,8 @@ class ImportFileTestCase(TestCase):
         assert os.path.exists('test uncompressed.txt'), "file not found"
         assert os.path.exists('test uncompressed.txt.gz'), "file not found"
 
-    def test_invalid_url(self):
+    @patch('resolwe_runtime_utils.send_message', side_effect=lambda x: x)
+    def test_invalid_url(self, send_mock):
         with self.assertRaises(requests.exceptions.ConnectionError):
             import_file('http://testurl/someslug', 'test uncompressed.txt.zip')
 

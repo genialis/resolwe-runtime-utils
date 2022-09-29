@@ -27,12 +27,12 @@ import shutil
 import socket
 import subprocess
 import tarfile
-import zlib
 import time
+import zlib
+from contextlib import suppress
 from enum import Enum
 from itertools import zip_longest
 from pathlib import Path
-
 
 # Socket constants. The timeout is set to infinite.
 SOCKET_TIMEOUT = None
@@ -86,7 +86,7 @@ def _retry(
                     time.sleep(sleep)
                     return func(*args, **kwargs)
                 except retry_exceptions as err:
-                    sleep = min(max_sleep, min_sleep * (2 ** retry))
+                    sleep = min(max_sleep, min_sleep * (2**retry))
                     last_error = err
             raise last_error
 
@@ -186,6 +186,7 @@ def send_message(data, header_size=8):
 
     finally:
         sock.close()
+        return response
 
 
 def collect_entry(entry, references):
@@ -768,6 +769,9 @@ def import_file(
     # Large file download from Google Drive requires cookie and token.
     try:
         response = None
+        # Resolve url.
+        src = send_message(command("resolve_url", src))["data"]
+
         if re.match(
             r'^https://drive.google.com/[-A-Za-z0-9\+&@#/%?=~_|!:,.;]*[-A-Za-z0-9\+&@#/%=~_|]$',
             src,
@@ -790,6 +794,7 @@ def import_file(
             src,
         ):
             response = requests.get(src, stream=True)
+
     except requests.exceptions.ConnectionError:
         raise requests.exceptions.ConnectionError("Could not connect to {}".format(src))
 
