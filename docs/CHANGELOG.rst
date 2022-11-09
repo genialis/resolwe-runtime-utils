@@ -7,9 +7,9 @@ file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
-==========
-Unreleased
-==========
+==================
+3.2.0 - 2023-10-24
+==================
 
 Added
 -----
