@@ -641,7 +641,6 @@ class SendMessageTest(TestCase):
 
 
 class ImportFileTestCase(TestCase):
-
     _test_data_dir = os.path.join(TEST_ROOT, '.test_data')
 
     def setUp(self):
