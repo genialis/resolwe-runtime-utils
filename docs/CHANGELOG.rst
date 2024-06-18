@@ -7,6 +7,17 @@ file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
+==========
+Unreleased
+==========
+
+Added
+-----
+- Add support for Python 3.10
+- Add support for Python 3.11
+- Add support for Python 3.12
+
+
 ==================
 3.2.0 - 2023-10-24
 ==================
