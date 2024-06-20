@@ -20,6 +20,7 @@ https://github.com/genialis/resolwe
 """
 
 import os.path
+
 import setuptools
 
 base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -61,7 +62,7 @@ setuptools.setup(
     ],
     keywords='resolwe runtime utilities library',
     py_modules=['resolwe_runtime_utils'],
-    install_requires=['requests>=2.20.1,<2.26'],
+    install_requires=['requests~=2.32.3'],
     extras_require={
         'dev': ['tox'],
         'docs': ['Sphinx', 'sphinx_rtd_theme'],

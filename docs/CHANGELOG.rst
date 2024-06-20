@@ -8,6 +8,15 @@ This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
 ==================
+3.4.0 - 2024-06-20
+==================
+
+Changed
+-------
+- Bump ``requests`` version
+
+
+==================
 3.3.0 - 2024-06-19
 ==================
 
