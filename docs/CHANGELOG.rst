@@ -7,6 +7,15 @@ file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
+==========
+Unreleased
+==========
+
+Changed
+-------
+- Bump ``requests`` version
+
+
 ==================
 3.3.0 - 2024-06-19
 ==================
