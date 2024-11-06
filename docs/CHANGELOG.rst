@@ -7,6 +7,15 @@ file.
 This project adheres to `Semantic Versioning <http://semver.org/>`_.
 
 
+==========
+Unreleased
+==========
+
+Changed
+-------
+- Drop support for Python 3.6 and 3.7
+
+
 ==================
 3.3.0 - 2024-06-19
 ==================

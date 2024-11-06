@@ -15,16 +15,12 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        tox-env: [py36, py37, py38, py39, py310, py311, py312, linters, packaging]
+        tox-env: [py38, py39, py310, py311, py312, linters, packaging]
         include:
-          - tox-env: py36
-            python-version: 3.6
-          - tox-env: py37
-            python-version: 3.7
           - tox-env: py38
             python-version: 3.8
           - tox-env: py39
