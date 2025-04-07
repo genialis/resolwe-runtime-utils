@@ -1,4 +1,4 @@
-# Copyright 2019 Genialis, Inc.
+# Copyright 2025 Genialis, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,4 +32,4 @@ __author__ = "Genialis, Inc."
 __email__ = "dev-team@genialis.com"
 
 __license__ = "Apache License (2.0)"
-__copyright__ = "2015-2023, " + __author__
+__copyright__ = "2015-2025, " + __author__
