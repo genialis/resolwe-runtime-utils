@@ -32,4 +32,4 @@ __author__ = "Genialis, Inc."
 __email__ = "dev-team@genialis.com"
 
 __license__ = "Apache License (2.0)"
-__copyright__ = "2015-2023, " + __author__
+__copyright__ = "2015-2025, " + __author__
