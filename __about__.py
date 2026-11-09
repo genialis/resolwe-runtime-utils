@@ -14,7 +14,7 @@
 
 """Central place for package metadata."""
 
-from pkg_resources import DistributionNotFound, get_distribution
+from importlib.metadata import PackageNotFoundError, version
 
 __name__ = "resolwe-runtime-utils"
 __title__ = "Resolwe Runtime Utilities"
@@ -23,8 +23,8 @@ __url__ = "https://github.com/genialis/resolwe-runtime-utils"
 __git_repo_url__ = __url__
 
 try:
-    __version__ = get_distribution(__name__).version
-except DistributionNotFound:
+    __version__ = version(__name__)
+except PackageNotFoundError:
     # Package is not (yet) installed.
     pass
 
